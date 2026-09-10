@@ -42,6 +42,7 @@ uses
   fmCopiaLiturgiaDia in 'fmCopiaLiturgiaDia.pas',
   DelphiZXingQRCode in 'components\DelphiZXingQRCode\DelphiZXingQRCode.pas',
   fmQRCode in 'fmQRCode.pas',
+  uYoutubeRSS in 'uYoutubeRSS.pas',
   uInstanciaUnica in 'uInstanciaUnica.pas';
 
 {$R *.res}

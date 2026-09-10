@@ -6162,7 +6162,9 @@ begin
   end
   else if (tipo = 'site') then
   begin
-    subtipo := lerParam(item, 'subitem', '', arq_liturgia);
+    //Vem da URL, e não do subtítulo: desde a busca por canal do YouTube o
+    //subtítulo do card pode ser o nome do vídeo, não o endereço
+    subtipo := lerParam(item, 'url', '', arq_liturgia);
     if  (Pos('.youtube.',subtipo) > 0)
      or (Pos('/youtube.',subtipo) > 0)
      or (Pos('.youtu.be.',subtipo) > 0)

@@ -3,7 +3,8 @@
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes,
+  System.Generics.Collections, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, BusinessSkinForm, bsSkinCtrls,
   Vcl.ComCtrls, Vcl.ExtCtrls, Vcl.StdCtrls, Vcl.Mask, bsSkinBoxCtrls,
   bsdbctrls, bsribbon, Data.DB, Data.Win.ADODB, bsColorCtrls, StrUtils, ShellApi,
@@ -12,6 +13,17 @@ uses
   FireDAC.Stan.Async, FireDAC.DApt, FireDAC.Comp.DataSet, FireDAC.Comp.Client;
 
 type
+  //Uma linha da lista de vídeos do canal: dados do feed mais a miniatura já
+  //decodificada (a lista é owner-draw, então a imagem fica pronta na memória)
+  TItemVideoYt = class
+  public
+    VideoId: string;
+    Titulo: string;
+    Publicado: TDateTime;
+    Miniatura: TBitmap;
+    destructor Destroy; override;
+  end;
+
   TfLiturgia = class(TForm)
     bsBusinessSkinForm1: TbsBusinessSkinForm;
     GridPanel2: TGridPanel;
@@ -79,10 +91,49 @@ type
     procedure bsSkinSpeedButton3Click(Sender: TObject);
   private
     { Private declarations }
+    //Bloco de busca de vídeos por canal do YouTube. Criado em tempo de
+    //execução (mesma abordagem de fmVideoOn) para não mexer no .dfm e não
+    //exigir pacote instalado na IDE.
+    pnlYt: TbsSkinPanel;
+    pnlChipsYt: TbsSkinPanel;
+    edtCanalYt: TbsSkinEdit;
+    btBuscaYt: TbsSkinSpeedButton;
+    lblStatusYt: TbsSkinStdLabel;
+    lstVideosYt: TListBox;
+    tmrAutoYt: TTimer;
+    videosYt: TObjectList<TItemVideoYt>;
+    canaisYt: TStringList;   // 'UCxxx=Nome', mais recente primeiro
+    buscandoYt: Boolean;
+    cancelaYt: Boolean;
+    autoBuscaYt: Boolean;
+    videoIdYt: string;
+    tituloVideoYt: string;
+    alturaFormBase: Integer;
+    alturaSiteBase: Integer;
+
+    procedure criaControlesYt;
+    procedure montaChipsYt;
+    procedure carregaCanaisYt;
+    procedure salvaCanalYt(const CanalId, Nome: string);
+    procedure buscaCanalYt(const Entrada: string);
+    procedure carregaMiniaturasYt;
+    procedure limpaVideosYt;
+    procedure statusYt(const Msg: string);
+    procedure ajustaLayoutSite;
+    procedure btBuscaYtClick(Sender: TObject);
+    procedure chipYtClick(Sender: TObject);
+    procedure edtCanalYtKeyPress(Sender: TObject; var Key: Char);
+    procedure lstVideosYtDrawItem(Control: TWinControl; Index: Integer;
+      ARect: TRect; State: TOwnerDrawState);
+    procedure lstVideosYtClick(Sender: TObject);
+    procedure tmrAutoYtTimer(Sender: TObject);
+  protected
+    procedure DoClose(var Action: TCloseAction); override;
   public
     { Public declarations }
     id: string;
     arquivoInicial: string;
+    destructor Destroy; override;
   end;
 
 var
@@ -92,7 +143,24 @@ implementation
 
 {$R *.dfm}
 
-uses fmMenu, fmBuscaMusica, dmComponentes, fmIniciando;
+uses fmMenu, fmBuscaMusica, dmComponentes, fmIniciando, uYoutubeRSS,
+  System.Math, Vcl.Imaging.jpeg;
+
+const
+  //Miniatura 16:9 reduzida: o suficiente para reconhecer o vídeo sem pesar a
+  //lista nem a rede
+  YT_LARG_THUMB = 96;
+  YT_ALT_THUMB  = 54;
+  YT_ALT_ITEM   = 62;
+  //Altura do bloco YouTube acrescentada ao painel de link externo e à janela
+  YT_ALT_BLOCO  = 232;
+  YT_MAX_CHIPS  = 8;
+
+destructor TItemVideoYt.Destroy;
+begin
+  Miniatura.Free;
+  inherited;
+end;
 
 procedure TfLiturgia.edtDiretorioEnter(Sender: TObject);
 begin
@@ -215,8 +283,14 @@ begin
   if (pnlSite.Visible) then
   begin
     urlSite.text := validaURL(urlSite.text);
-    Add('subitem', 'Site '+urlSite.Text);
+    //Quando o vídeo veio da busca por canal, o card mostra o nome dele; link
+    //colado à mão continua exibindo a URL, que é a única informação que existe
+    if (Trim(tituloVideoYt) <> '') and (ytVideoIdDeUrl(urlSite.Text) = videoIdYt)
+      then Add('subitem', tituloVideoYt)
+      else Add('subitem', 'Site '+urlSite.Text);
     Add('url', urlSite.Text);
+    Add('video_id', videoIdYt);
+    Add('video_titulo', tituloVideoYt);
   end
   else
   if (pnlArquivo.Visible) then
@@ -329,6 +403,9 @@ begin
 
   lblItem.Visible := not pnlItensAgendados.Visible;
   txtItem.Visible := not pnlItensAgendados.Visible;
+
+  if pnlSite.Visible then criaControlesYt;
+  ajustaLayoutSite;
 
   if idx < 0 then Exit;
   executaOpcoes;
@@ -445,9 +522,17 @@ begin
       edtAnotacao.Text := '';
 
     if tipo = 'site' then
-      urlSite.Text := fmIndex.lerParam(id, 'url', '', fmIndex.arq_liturgia)
+    begin
+      urlSite.Text := fmIndex.lerParam(id, 'url', '', fmIndex.arq_liturgia);
+      videoIdYt := fmIndex.lerParam(id, 'video_id', '', fmIndex.arq_liturgia);
+      tituloVideoYt := fmIndex.lerParam(id, 'video_titulo', '', fmIndex.arq_liturgia);
+    end
     else
+    begin
       urlSite.Text := '';
+      videoIdYt := '';
+      tituloVideoYt := '';
+    end;
 
     if tipo = 'arquivo' then
     begin
@@ -529,6 +614,12 @@ end;
 procedure TfLiturgia.urlSiteExit(Sender: TObject);
 begin
   urlSite.text := validaURL(urlSite.text);
+  //URL trocada à mão invalida o título capturado do feed
+  if (videoIdYt <> '') and (ytVideoIdDeUrl(urlSite.Text) <> videoIdYt) then
+  begin
+    videoIdYt := '';
+    tituloVideoYt := '';
+  end;
 end;
 
 function TfLiturgia.validaURL(url: string): string;
@@ -539,6 +630,486 @@ begin
     then url := 'http://'+url;
 
   Result := url;
+end;
+
+{ ---------------------------------------------------------------------------
+  Busca de vídeos por canal do YouTube (feed RSS público)
+  --------------------------------------------------------------------------- }
+
+procedure TfLiturgia.criaControlesYt;
+var
+  pnlLinha: TbsSkinPanel;
+  lbl: TbsSkinStdLabel;
+begin
+  if Assigned(pnlYt) then Exit;
+
+  videosYt := TObjectList<TItemVideoYt>.Create(True);
+  canaisYt := TStringList.Create;
+
+  //A altura do painel de link externo passa a ser calculada aqui: com o bloco
+  //novo o AutoSize herdado do .dfm deixaria a janela sem espaço para a lista
+  alturaSiteBase := pnlSite.Height;
+  pnlSite.AutoSize := False;
+
+  pnlYt := TbsSkinPanel.Create(Self);
+  pnlYt.Parent := pnlSite;
+  pnlYt.SkinData := DM.bsSkinData1;
+  pnlYt.SkinDataName := 'panel';
+  pnlYt.Caption := '';
+  pnlYt.Top := pnlSite.Height;  // garante que entra abaixo do campo de URL
+  pnlYt.Height := YT_ALT_BLOCO;
+  pnlYt.Align := alTop;
+
+  pnlLinha := TbsSkinPanel.Create(Self);
+  pnlLinha.Parent := pnlYt;
+  pnlLinha.SkinData := DM.bsSkinData1;
+  pnlLinha.SkinDataName := 'panel';
+  pnlLinha.Caption := '';
+  pnlLinha.Height := 29;
+  pnlLinha.Align := alTop;
+
+  lbl := TbsSkinStdLabel.Create(Self);
+  lbl.Parent := pnlLinha;
+  lbl.SkinData := DM.bsSkinData1;
+  lbl.SkinDataName := 'stdlabel';
+  lbl.AutoSize := False;
+  lbl.Caption := 'Canal:';
+  lbl.Layout := tlCenter;
+  lbl.Width := 45;
+  lbl.AlignWithMargins := True;
+  lbl.Margins.Left := 10;
+  lbl.Align := alLeft;
+
+  btBuscaYt := TbsSkinSpeedButton.Create(Self);
+  btBuscaYt.Parent := pnlLinha;
+  btBuscaYt.SkinData := DM.bsSkinData1;
+  btBuscaYt.SkinDataName := 'toolbutton';
+  btBuscaYt.Caption := ' Buscar';
+  btBuscaYt.ShowCaption := True;
+  btBuscaYt.Width := 95;
+  btBuscaYt.AlignWithMargins := True;
+  btBuscaYt.Margins.Right := 10;
+  btBuscaYt.Align := alRight;
+  btBuscaYt.OnClick := btBuscaYtClick;
+
+  edtCanalYt := TbsSkinEdit.Create(Self);
+  edtCanalYt.Parent := pnlLinha;
+  edtCanalYt.SkinData := DM.bsSkinData1;
+  edtCanalYt.SkinDataName := 'edit';
+  edtCanalYt.AlignWithMargins := True;
+  edtCanalYt.Margins.Top := 5;
+  edtCanalYt.Margins.Bottom := 5;
+  edtCanalYt.Align := alClient;
+  edtCanalYt.Hint := 'Aceita @handle, link do canal ou ID (UC...)';
+  edtCanalYt.ShowHint := True;
+  edtCanalYt.OnKeyPress := edtCanalYtKeyPress;
+
+  pnlChipsYt := TbsSkinPanel.Create(Self);
+  pnlChipsYt.Parent := pnlYt;
+  pnlChipsYt.SkinData := DM.bsSkinData1;
+  pnlChipsYt.SkinDataName := 'panel';
+  pnlChipsYt.Caption := '';
+  pnlChipsYt.Height := 27;
+  pnlChipsYt.Align := alTop;
+
+  lblStatusYt := TbsSkinStdLabel.Create(Self);
+  lblStatusYt.Parent := pnlYt;
+  lblStatusYt.SkinData := DM.bsSkinData1;
+  lblStatusYt.SkinDataName := 'stdlabel';
+  lblStatusYt.AutoSize := False;
+  lblStatusYt.Caption := '';
+  lblStatusYt.Layout := tlCenter;
+  lblStatusYt.Height := 18;
+  lblStatusYt.AlignWithMargins := True;
+  lblStatusYt.Margins.Left := 10;
+  lblStatusYt.Margins.Top := 0;
+  lblStatusYt.Margins.Bottom := 0;
+  lblStatusYt.Align := alTop;
+
+  lstVideosYt := TListBox.Create(Self);
+  lstVideosYt.Parent := pnlYt;
+  lstVideosYt.Style := lbOwnerDrawFixed;
+  lstVideosYt.ItemHeight := YT_ALT_ITEM;
+  lstVideosYt.AlignWithMargins := True;
+  lstVideosYt.Margins.Left := 10;
+  lstVideosYt.Margins.Right := 10;
+  lstVideosYt.Margins.Bottom := 6;
+  lstVideosYt.Align := alClient;
+  lstVideosYt.OnDrawItem := lstVideosYtDrawItem;
+  lstVideosYt.OnClick := lstVideosYtClick;
+
+  //A busca no canal salvo só dispara depois que a janela aparece: fazê-la
+  //dentro do OnActivate deixaria o formulário em branco durante a rede
+  tmrAutoYt := TTimer.Create(Self);
+  tmrAutoYt.Enabled := False;
+  tmrAutoYt.Interval := 300;
+  tmrAutoYt.OnTimer := tmrAutoYtTimer;
+
+  carregaCanaisYt;
+  montaChipsYt;
+end;
+
+procedure TfLiturgia.carregaCanaisYt;
+var
+  partes: TArray<string>;
+  i: Integer;
+  ultimo: string;
+begin
+  canaisYt.Clear;
+  //Lista curta: 'UCxxx=Nome' separados por '|' num único parâmetro do config
+  partes := SplitString(fmIndex.lerParam('Liturgia', 'CanaisYoutube', ''), '|');
+  for i := 0 to High(partes) do
+    if Trim(partes[i]) <> '' then
+      canaisYt.Add(Trim(partes[i]));
+
+  ultimo := fmIndex.lerParam('Liturgia', 'CanalYoutubeUltimo', '');
+  if (Trim(ultimo) = '') and (canaisYt.Count > 0) then
+    ultimo := canaisYt.Names[0];
+  edtCanalYt.Text := ultimo;
+end;
+
+procedure TfLiturgia.salvaCanalYt(const CanalId, Nome: string);
+var
+  i: Integer;
+  nome_limpo, lista: string;
+begin
+  if Trim(CanalId) = '' then Exit;
+
+  //'|' é o separador da lista e '=' separa id do nome: nome não pode contê-los
+  nome_limpo := Trim(StringReplace(Nome, '|', '/', [rfReplaceAll]));
+  nome_limpo := Trim(StringReplace(nome_limpo, '=', '-', [rfReplaceAll]));
+  if nome_limpo = '' then nome_limpo := CanalId;
+
+  for i := canaisYt.Count - 1 downto 0 do
+    if SameText(canaisYt.Names[i], CanalId) then canaisYt.Delete(i);
+
+  canaisYt.Insert(0, CanalId + '=' + nome_limpo);
+  while canaisYt.Count > YT_MAX_CHIPS do
+    canaisYt.Delete(canaisYt.Count - 1);
+
+  lista := '';
+  for i := 0 to canaisYt.Count - 1 do
+  begin
+    if lista <> '' then lista := lista + '|';
+    lista := lista + canaisYt[i];
+  end;
+
+  fmIndex.gravaParam('Liturgia', 'CanaisYoutube', lista);
+  fmIndex.gravaParam('Liturgia', 'CanalYoutubeUltimo', CanalId);
+  montaChipsYt;
+end;
+
+procedure TfLiturgia.montaChipsYt;
+var
+  i, esq: Integer;
+  chip: TbsSkinSpeedButton;
+  nome: string;
+begin
+  if not Assigned(pnlChipsYt) then Exit;
+
+  for i := pnlChipsYt.ControlCount - 1 downto 0 do
+    pnlChipsYt.Controls[i].Free;
+
+  esq := 10;
+  for i := 0 to canaisYt.Count - 1 do
+  begin
+    nome := canaisYt.ValueFromIndex[i];
+    if Trim(nome) = '' then nome := canaisYt.Names[i];
+
+    chip := TbsSkinSpeedButton.Create(Self);
+    chip.Parent := pnlChipsYt;
+    chip.SkinData := DM.bsSkinData1;
+    chip.SkinDataName := 'toolbutton';
+    chip.Caption := ' ' + nome + ' ';
+    chip.ShowCaption := True;
+    chip.Hint := canaisYt.Names[i];
+    chip.ShowHint := True;
+    chip.Tag := i;
+    chip.Height := 21;
+    chip.Top := 3;
+    chip.Left := esq;
+    chip.Width := Canvas.TextWidth(chip.Caption) + 20;
+    chip.OnClick := chipYtClick;
+
+    Inc(esq, chip.Width + 6);
+    //Sem quebra de linha: o excesso fica fora da faixa em vez de empurrar a lista
+    if esq > pnlChipsYt.Width - 10 then Break;
+  end;
+
+  pnlChipsYt.Visible := canaisYt.Count > 0;
+end;
+
+procedure TfLiturgia.statusYt(const Msg: string);
+begin
+  if not Assigned(lblStatusYt) then Exit;
+  lblStatusYt.Caption := Msg;
+  lblStatusYt.Update;
+end;
+
+procedure TfLiturgia.limpaVideosYt;
+begin
+  if Assigned(lstVideosYt) then lstVideosYt.Items.Clear;
+  if Assigned(videosYt) then videosYt.Clear;
+end;
+
+procedure TfLiturgia.buscaCanalYt(const Entrada: string);
+var
+  canal_id, canal_nome: string;
+  videos: TYoutubeVideos;
+  item: TItemVideoYt;
+  i: Integer;
+begin
+  if buscandoYt or not Assigned(lstVideosYt) then Exit;
+
+  if Trim(Entrada) = '' then
+  begin
+    statusYt('Informe o canal: @handle, link do canal ou ID (UC...).');
+    Exit;
+  end;
+
+  buscandoYt := True;
+  cancelaYt := False;
+  btBuscaYt.Enabled := False;
+  Screen.Cursor := crHourGlass;
+  try
+    limpaVideosYt;
+    statusYt('Procurando o canal...');
+    Application.ProcessMessages;
+
+    if not ytResolveCanal(Trim(Entrada), canal_id) then
+    begin
+      statusYt('Canal não encontrado. Confira o @handle, o link ou o ID.');
+      Exit;
+    end;
+
+    statusYt('Lendo os vídeos do canal...');
+    Application.ProcessMessages;
+
+    if not ytBuscaVideos(canal_id, YT_MAX_VIDEOS, videos, canal_nome) then
+    begin
+      statusYt('Não foi possível ler os vídeos deste canal.');
+      Exit;
+    end;
+
+    for i := 0 to High(videos) do
+    begin
+      item := TItemVideoYt.Create;
+      item.VideoId := videos[i].VideoId;
+      item.Titulo := videos[i].Titulo;
+      item.Publicado := videos[i].Publicado;
+      videosYt.Add(item);
+      lstVideosYt.Items.AddObject(item.Titulo, item);
+    end;
+
+    if Trim(canal_nome) = '' then canal_nome := canal_id;
+    statusYt(canal_nome + ' - ' + IntToStr(lstVideosYt.Items.Count) +
+             ' vídeo(s). Clique para usar.');
+    salvaCanalYt(canal_id, canal_nome);
+    carregaMiniaturasYt;
+  finally
+    Screen.Cursor := crDefault;
+    if Assigned(btBuscaYt) then btBuscaYt.Enabled := True;
+    buscandoYt := False;
+  end;
+end;
+
+procedure TfLiturgia.carregaMiniaturasYt;
+var
+  i: Integer;
+  ms: TMemoryStream;
+  jpg: TJPEGImage;
+  item: TItemVideoYt;
+begin
+  //Miniaturas entram uma a uma, depois da lista já montada: a janela continua
+  //utilizável enquanto as imagens chegam
+  for i := 0 to videosYt.Count - 1 do
+  begin
+    if cancelaYt then Exit;
+    item := videosYt[i];
+    if Assigned(item.Miniatura) then Continue;
+
+    ms := TMemoryStream.Create;
+    try
+      try
+        if ytBaixaBinario(ytThumbUrl(item.VideoId), ms) and (ms.Size > 0) then
+        begin
+          ms.Position := 0;
+          jpg := TJPEGImage.Create;
+          try
+            jpg.LoadFromStream(ms);
+            item.Miniatura := TBitmap.Create;
+            item.Miniatura.PixelFormat := pf24bit;
+            item.Miniatura.SetSize(YT_LARG_THUMB, YT_ALT_THUMB);
+            item.Miniatura.Canvas.StretchDraw(
+              Rect(0, 0, YT_LARG_THUMB, YT_ALT_THUMB), jpg);
+          finally
+            jpg.Free;
+          end;
+        end;
+      except
+        //Miniatura é enfeite: falha nela não interrompe a lista
+        FreeAndNil(item.Miniatura);
+      end;
+    finally
+      ms.Free;
+    end;
+
+    if cancelaYt then Exit;
+    lstVideosYt.Invalidate;
+    Application.ProcessMessages;
+  end;
+end;
+
+procedure TfLiturgia.lstVideosYtDrawItem(Control: TWinControl; Index: Integer;
+  ARect: TRect; State: TOwnerDrawState);
+var
+  cv: TCanvas;
+  item: TItemVideoYt;
+  r_thumb, r_texto: TRect;
+  data: string;
+begin
+  cv := lstVideosYt.Canvas;
+  if odSelected in State
+    then cv.Brush.Color := clHighlight
+    else cv.Brush.Color := lstVideosYt.Color;
+  cv.FillRect(ARect);
+
+  if (Index < 0) or (Index >= lstVideosYt.Items.Count) then Exit;
+  item := TItemVideoYt(lstVideosYt.Items.Objects[Index]);
+  if item = nil then Exit;
+
+  r_thumb := Rect(ARect.Left + 4, ARect.Top + 4,
+                  ARect.Left + 4 + YT_LARG_THUMB, ARect.Top + 4 + YT_ALT_THUMB);
+  if Assigned(item.Miniatura) then
+    cv.StretchDraw(r_thumb, item.Miniatura)
+  else
+  begin
+    cv.Brush.Color := clBtnFace;
+    cv.FillRect(r_thumb);
+  end;
+
+  cv.Brush.Style := bsClear;
+  if odSelected in State
+    then cv.Font.Color := clHighlightText
+    else cv.Font.Color := clWindowText;
+
+  cv.Font.Style := [fsBold];
+  r_texto := Rect(r_thumb.Right + 8, ARect.Top + 4, ARect.Right - 4, ARect.Top + 38);
+  DrawText(cv.Handle, PChar(item.Titulo), -1, r_texto,
+           DT_LEFT or DT_WORDBREAK or DT_END_ELLIPSIS or DT_NOPREFIX);
+
+  cv.Font.Style := [];
+  if not (odSelected in State) then cv.Font.Color := clGrayText;
+  if item.Publicado > 0
+    then data := FormatDateTime('dd/mm/yyyy hh:nn', item.Publicado)
+    else data := '';
+  r_texto := Rect(r_thumb.Right + 8, ARect.Bottom - 20, ARect.Right - 4, ARect.Bottom - 4);
+  DrawText(cv.Handle, PChar(data), -1, r_texto,
+           DT_LEFT or DT_SINGLELINE or DT_VCENTER or DT_NOPREFIX);
+
+  cv.Brush.Style := bsSolid;
+end;
+
+procedure TfLiturgia.lstVideosYtClick(Sender: TObject);
+var
+  item: TItemVideoYt;
+begin
+  if lstVideosYt.ItemIndex < 0 then Exit;
+  item := TItemVideoYt(lstVideosYt.Items.Objects[lstVideosYt.ItemIndex]);
+  if item = nil then Exit;
+
+  videoIdYt := item.VideoId;
+  tituloVideoYt := item.Titulo;
+  urlSite.Text := ytUrlVideo(item.VideoId);
+  txtItem.Text := item.Titulo;
+  statusYt('Vídeo escolhido: ' + item.Titulo);
+end;
+
+procedure TfLiturgia.btBuscaYtClick(Sender: TObject);
+begin
+  autoBuscaYt := True;
+  buscaCanalYt(edtCanalYt.Text);
+end;
+
+procedure TfLiturgia.chipYtClick(Sender: TObject);
+var
+  i: Integer;
+begin
+  i := TComponent(Sender).Tag;
+  if (i < 0) or (i >= canaisYt.Count) then Exit;
+  edtCanalYt.Text := canaisYt.Names[i];
+  autoBuscaYt := True;
+  //A busca refaz a faixa de chips, o que destruiria este botão ainda dentro do
+  //clique dele: por isso ela sai da pilha do evento
+  tmrAutoYt.Enabled := True;
+end;
+
+procedure TfLiturgia.edtCanalYtKeyPress(Sender: TObject; var Key: Char);
+begin
+  if Key = #13 then
+  begin
+    Key := #0;  // evita o beep do edit
+    btBuscaYtClick(Sender);
+  end;
+end;
+
+procedure TfLiturgia.tmrAutoYtTimer(Sender: TObject);
+begin
+  tmrAutoYt.Enabled := False;
+  if not pnlSite.Visible then Exit;
+
+  if buscandoYt then
+  begin
+    //Busca anterior ainda baixando miniaturas: interrompe e tenta de novo
+    cancelaYt := True;
+    tmrAutoYt.Enabled := True;
+    Exit;
+  end;
+
+  buscaCanalYt(edtCanalYt.Text);
+end;
+
+procedure TfLiturgia.ajustaLayoutSite;
+begin
+  if alturaFormBase = 0 then alturaFormBase := ClientHeight;
+
+  if pnlSite.Visible and Assigned(pnlYt) then
+  begin
+    pnlSite.Height := alturaSiteBase + YT_ALT_BLOCO;
+    ClientHeight := alturaFormBase + YT_ALT_BLOCO;
+
+    //A janela cresce para baixo: sem isso ela sai da área útil da tela
+    if Top + Height > Screen.WorkAreaRect.Bottom then
+      Top := Max(Screen.WorkAreaRect.Top, Screen.WorkAreaRect.Bottom - Height);
+
+    //Uma única tentativa automática por abertura, no último canal usado
+    if (not autoBuscaYt) and (not buscandoYt) and
+       (lstVideosYt.Items.Count = 0) and (Trim(edtCanalYt.Text) <> '') then
+    begin
+      autoBuscaYt := True;
+      tmrAutoYt.Enabled := True;
+    end;
+  end
+  else
+  begin
+    if Assigned(pnlYt) then pnlSite.Height := alturaSiteBase;
+    ClientHeight := alturaFormBase;
+  end;
+end;
+
+procedure TfLiturgia.DoClose(var Action: TCloseAction);
+begin
+  //Interrompe o download de miniaturas em andamento
+  cancelaYt := True;
+  inherited;
+end;
+
+destructor TfLiturgia.Destroy;
+begin
+  cancelaYt := True;
+  FreeAndNil(videosYt);
+  FreeAndNil(canaisYt);
+  inherited;
 end;
 
 end.
