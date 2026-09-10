@@ -15,7 +15,8 @@ uses
   FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt, FireDAC.UI.Intf,
   FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.VCLUI.Wait,
   FireDAC.Comp.Client, FireDAC.Comp.DataSet, FireDAC.Phys.SQLite,
-  FireDAC.Phys.SQLiteDef, FireDAC.Stan.ExprFuncs;
+  FireDAC.Phys.SQLiteDef, FireDAC.Phys.SQLiteWrapper.Stat,
+  FireDAC.Stan.ExprFuncs;
 
 type
   TDM = class(TDataModule)

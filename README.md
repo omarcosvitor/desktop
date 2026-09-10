@@ -18,7 +18,7 @@ Alguns dos recursos são:
 
 Você vai precisar de:
 
-- Delphi RAD Studio 10.2 ([baixe aqui](https://altd.embarcadero.com/download/radstudio/10.2/delphicbuilder10_2.iso))
+- Delphi RAD Studio 13 (Florence) - a Community Edition atende ([baixe aqui](https://www.embarcadero.com/products/delphi/starter/free-download))
 - Uma versão instalada (e preferencialmente sincronizada) do LouvorJA ([baixe aqui](https://louvorja.com.br/download/)) em uma pasta de desenvolvimento.
 - Um computador com Windows
 
@@ -35,7 +35,7 @@ Instação opcional. Serve para deixar o código com uma aparência mais organiz
 #### Instalação
 
 1. Abra o RAD Studio e no menu "File", selecione "Open".
-2. Navegue até a pasta `/components/bsfd102tokyo` deste repositório e selecione o arquivo `bsfd102Tokyo.dpk`.
+2. Navegue até a pasta `/components/bsfd102tokyo` deste repositório e selecione o arquivo `bsfd102Tokyo.dpk`. A IDE vai pedir para converter o pacote; aceite.
 3. O pacote será exibido em seu Project Manager (normalmente a porção direita da tela) sob o nome `bsfd102Tokyo.bpl`. Clique com o botão direito nesse projeto e clique em "Install".
 4. Após instalado, pode fechar o projeto.
 
@@ -53,8 +53,8 @@ Instação opcional. Serve para deixar o código com uma aparência mais organiz
 ### PNGComponents
 
 1. Abra o RAD Studio e no menu "File", selecione "Open".
-2. Navegue até a pasta `/components/PngComponents/PackagesTokyo` deste repositório e selecione o arquivo `PngComponentsDesign.dpk`.
-3. O pacote será exibido em seu Project Manager (normalmente a porção direita da tela) sob o nome `PngComponentsDesign250.bpl`. Clique com o botão direito nesse projeto e clique em "Install".
+2. Navegue até a pasta `/components/PngComponents/PackagesAthens` deste repositório e selecione o arquivo `PngComponentsDesign.dpk`.
+3. O pacote será exibido em seu Project Manager (normalmente a porção direita da tela) sob o nome `PngComponentsDesign290.bpl`. Clique com o botão direito nesse projeto e clique em "Install".
 4. Após instalado, pode fechar o projeto.
 
 ## Execução do Programa
@@ -64,7 +64,12 @@ Instação opcional. Serve para deixar o código com uma aparência mais organiz
 1. No RAD Studio, selecione o menu File > Open e abra o arquivo "LouvorJA.dproj" deste repositório.
 2. No menu superior Project, selecione "Options..."
 3. Na aba "Delphi Compiler", selecione a opção "Output directory" (não é necessário expandir a opção) e selecione a pasta onde está o executável do programa, copiado para o diretório de desenvolvimento, conforme seção "Requisitos".
+4. Confira que a configuração escolhida na barra do Project Manager é a mesma em que você alterou o "Output directory" - Debug e Release têm opções separadas.
+
+### Substitua o borlndmm.dll
+
+O programa usa `ShareMem`, e o `borlndmm.dll` que acompanha a instalação oficial é o da versão do Delphi em que ela foi compilada. Copie o `borlndmm.dll` da pasta `bin` do seu RAD Studio (por exemplo `C:\Program Files (x86)\Embarcadero\Studio\37.0\bin`) por cima do que está no diretório de desenvolvimento.
 
 ---
 
-Após seguir esses passos, você provavelmente já conseguirá executar o LouvorJA no modo de desenvolvedor, a partir do código, em sua máquina, e trabalhar em melhorias. Esses passos foram desenvolvidos para se executar na versão 10.2 (Tokyo) do Delphi, e podem não funcionar em outras versões, por mais atualizadas que sejam.
+Após seguir esses passos, você provavelmente já conseguirá executar o LouvorJA no modo de desenvolvedor, a partir do código, em sua máquina, e trabalhar em melhorias. Esses passos foram desenvolvidos para se executar na versão 13 (Florence) do Delphi, e podem não funcionar em outras versões. Na Community Edition a compilação só acontece pela IDE - `dcc32` e `msbuild` na linha de comando são bloqueados pela licença.
