@@ -122,7 +122,9 @@ begin
 
 
   //**CARREGA VARIAVEIS*********************************************************
-  dir_dados := GetEnvironmentVariable('APPDATA')+'\LouvorJA\';
+  dir_dados := ExtractFilePath(Application.ExeName) + 'dados\';
+  if not(DirectoryExists(dir_dados)) then
+    dir_dados := GetEnvironmentVariable('APPDATA')+'\LouvorJA\';
   dir_temp := GetEnvironmentVariable('TEMP')+'\LouvorJA\';
   url_params := 'https://api.louvorja.com.br/params?type=env';
   api_token := '02@v2nFB2Dc';
