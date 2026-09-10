@@ -2321,7 +2321,7 @@ uses
   fmMonitorPainelDinamico, fmMonitorCronometro,
   fmMonitorSorteio, fmMonitorCronometroCulto, fmMonitorBibliaBusca,
   fmMonitorBiblia, fmMonitorMenuMusicas, fmIdentificaMonitores,
-  fmCopiaLiturgiaDia, uInstanciaUnica;
+  fmCopiaLiturgiaDia, uInstanciaUnica, uYoutubeRSS;
 
 {$R *.dfm}
 
@@ -6165,10 +6165,7 @@ begin
     //Vem da URL, e não do subtítulo: desde a busca por canal do YouTube o
     //subtítulo do card pode ser o nome do vídeo, não o endereço
     subtipo := lerParam(item, 'url', '', arq_liturgia);
-    if  (Pos('.youtube.',subtipo) > 0)
-     or (Pos('/youtube.',subtipo) > 0)
-     or (Pos('.youtu.be.',subtipo) > 0)
-     or (Pos('/youtu.be.',subtipo) > 0)
+    if ytEhLinkYoutube(subtipo)
       then TbsPngImageView(FindComponent(item+'_bticon_img')).ImageIndex := 38
       else TbsPngImageView(FindComponent(item+'_bticon_img')).ImageIndex := 49;
   end
@@ -6532,6 +6529,16 @@ end;
 
 function TfmIndex.getVideoID(link: string): string;
 begin
+  link := Trim(link);
+
+  //Formatos conhecidos de URL do YouTube (watch, youtu.be, embed, shorts, live)
+  Result := ytVideoIdDeUrl(link);
+  if Result <> '' then Exit;
+
+  //Não é URL do YouTube: pode ser o próprio ID digitado
+  if TRegEx.IsMatch(link, '^[A-Za-z0-9_-]{11}$') then Exit(link);
+
+  //Sobra o comportamento antigo, para não recusar entrada que já funcionava
   if Pos('v=', link) > 0 then
     link := Copy(link, Pos('v=', link) + 2, length(link));
 
@@ -7707,16 +7714,11 @@ begin
   begin
     if (sbVideoOnAbreLiturgia.ItemIndex = 1) then
     begin
-      subitem := lerParam(item, 'url', '0', arq_liturgia);
-      if
-       (Pos('v=', subitem) > 0)
-       and (
-          (Pos('.youtube.',subitem) > 0)
-       or (Pos('/youtube.',subitem) > 0)
-       or (Pos('.youtu.be.',subitem) > 0)
-       or (Pos('/youtu.be.',subitem) > 0)
-       )
-        then abreVideoOn(getVideoID(subitem), lerParam(item, 'item', '0', arq_liturgia))
+      //Reconhece watch, youtu.be, shorts, live e embed - antes só abria no
+      //player quando a URL tinha 'v=', deixando o link curto de fora
+      subitem := ytVideoIdDeUrl(lerParam(item, 'url', '', arq_liturgia));
+      if (subitem <> '')
+        then abreVideoOn(subitem, lerParam(item, 'item', '0', arq_liturgia))
         else abrirArquivo(lerParam(item, 'url', '', arq_liturgia));
     end
     else abrirArquivo(lerParam(item, 'url', '', arq_liturgia));

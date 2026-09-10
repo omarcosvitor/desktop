@@ -8,9 +8,21 @@
   é segredo exposto. O preço é a limitação do feed: apenas os ~15 vídeos mais
   recentes, sem paginação e sem busca por texto.
 
-  O feed só aceita o ID do canal (UC...). Handle (@nome), URL personalizada
-  (/c/nome) e usuário legado (/user/nome) precisam ser resolvidos antes, lendo
-  o HTML da página do canal - é o único caminho sem chave de API.
+  O feed só aceita três chaves: channel_id, playlist_id e o user legado. Handle
+  (@nome) e URL personalizada (/c/nome) não têm equivalente, então precisam ser
+  resolvidos antes. A ordem tenta sempre o caminho mais estável primeiro:
+
+    1. ID já presente na entrada (UC..., /channel/UC..., channel_id=UC...);
+    2. usuário legado pelo próprio feed (?user=), que devolve <yt:channelId> -
+       sem passar por HTML;
+    3. HTML da página do canal, lendo primeiro o <link rel="alternate"
+       type="application/rss+xml"> - o elemento de auto-descoberta de feed que
+       os leitores de RSS usam, bem mais estável que o "channelId" do
+       ytInitialData, que é estrutura interna do site.
+
+  Ainda é raspagem de HTML no passo 3, e não existe alternativa sem chave de
+  API: se o YouTube mudar a página, resta ao usuário colar o ID UC... direto,
+  que o campo aceita.
 }
 
 interface
@@ -37,6 +49,8 @@ function ytResolveCanal(const Entrada: string; out CanalId: string): Boolean;
 function ytBuscaVideos(const CanalId: string; Maximo: Integer;
   out Videos: TYoutubeVideos; out CanalNome: string): Boolean;
 function ytBaixaBinario(const Url: string; Destino: TStream): Boolean;
+//True para qualquer endereço de domínio do YouTube (inclui youtu.be)
+function ytEhLinkYoutube(const Url: string): Boolean;
 function ytUrlVideo(const VideoId: string): string;
 function ytThumbUrl(const VideoId: string): string;
 function ytVideoIdDeUrl(const Url: string): string;
@@ -44,14 +58,15 @@ function ytVideoIdDeUrl(const Url: string): string;
 implementation
 
 uses
-  System.Net.HttpClient, System.NetEncoding, System.RegularExpressions,
-  System.DateUtils, System.StrUtils;
+  System.Net.HttpClient, System.Net.URLClient, System.NetEncoding,
+  System.RegularExpressions, System.DateUtils, System.StrUtils;
 
 const
   //O YouTube devolve página reduzida (sem o channelId) para agente desconhecido
   UA_NAVEGADOR = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
                  '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
   URL_FEED  = 'https://www.youtube.com/feeds/videos.xml?channel_id=';
+  URL_FEED_USER = 'https://www.youtube.com/feeds/videos.xml?user=';
   URL_CANAL = 'https://www.youtube.com/';
   URL_VIDEO = 'https://www.youtube.com/watch?v=';
   //mqdefault: única miniatura 16:9 que existe para todo vídeo (320x180)
@@ -62,6 +77,9 @@ const
   TIMEOUT_RESPOSTA = 15000;
   RE_CANAL_ID = 'UC[A-Za-z0-9_-]{22}';
   RE_VIDEO_ID = '[A-Za-z0-9_-]{11}';
+  //Host do YouTube e nada mais: '(sub.)*youtube.com', 'youtube-nocookie.com' ou
+  //'youtu.be', sempre terminando o domínio - assim 'meu-youtube.com.br' não passa
+  RE_HOST_YT = '^(?:https?://)?(?:[\w-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)(?:[/:?#]|$)';
 
 function criaCliente: THTTPClient;
 begin
@@ -70,6 +88,15 @@ begin
   Result.ConnectionTimeout := TIMEOUT_CONEXAO;
   Result.ResponseTimeout := TIMEOUT_RESPOSTA;
   Result.HandleRedirects := True;
+end;
+
+function cabecalhosPadrao: TNetHeaders;
+begin
+  //Sem o cookie de consentimento, parte da Europa recebe a tela do
+  //consent.youtube.com no lugar da página do canal
+  Result := TNetHeaders.Create(
+    TNameValuePair.Create('Cookie', 'CONSENT=YES+cb; SOCS=CAI'),
+    TNameValuePair.Create('Accept-Language', 'pt-BR,pt;q=0.9,en;q=0.8'));
 end;
 
 function ytBaixaBinario(const Url: string; Destino: TStream): Boolean;
@@ -83,7 +110,7 @@ begin
   cli := criaCliente;
   try
     try
-      resp := cli.Get(Url, Destino);
+      resp := cli.Get(Url, Destino, cabecalhosPadrao);
     except
       //Rede fora, DNS ou TLS: quem chamou decide a mensagem ao usuário
       Exit;
@@ -115,22 +142,63 @@ begin
   end;
 end;
 
-function extraiCanalId(const Texto: string): string;
+function valorTag(const Bloco, Tag: string): string;
 var
   m: TMatch;
 begin
   Result := '';
-  m := TRegEx.Match(Texto, '"(?:channelId|externalId)"\s*:\s*"(' + RE_CANAL_ID + ')"');
-  if not m.Success then
-    m := TRegEx.Match(Texto, 'channel/(' + RE_CANAL_ID + ')');
+  m := TRegEx.Match(Bloco, '<' + Tag + '[^>]*>(.*?)</' + Tag + '>', [roSingleLine]);
   if m.Success then
-    Result := m.Groups[1].Value;
+    Result := TNetEncoding.HTML.Decode(Trim(m.Groups[1].Value));
+end;
+
+function extraiCanalId(const Texto: string): string;
+const
+  //Do mais estável para o menos: o link de auto-descoberta do RSS é elemento
+  //padrão de <head> (é por ele que os leitores de feed acham o canal), enquanto
+  //"channelId" vem do ytInitialData, estrutura interna que muda sem aviso
+  PADROES: array[0..4] of string = (
+    'feeds/videos\.xml\?channel_id=(' + RE_CANAL_ID + ')',
+    'rel="canonical"[^>]*href="[^"]*channel/(' + RE_CANAL_ID + ')',
+    'og:url"[^>]*content="[^"]*channel/(' + RE_CANAL_ID + ')',
+    '"(?:channelId|externalId)"\s*:\s*"(' + RE_CANAL_ID + ')"',
+    'channel/(' + RE_CANAL_ID + ')');
+var
+  i: Integer;
+  m: TMatch;
+begin
+  Result := '';
+  for i := Low(PADROES) to High(PADROES) do
+  begin
+    m := TRegEx.Match(Texto, PADROES[i]);
+    if m.Success then
+    begin
+      Result := m.Groups[1].Value;
+      Exit;
+    end;
+  end;
+end;
+
+//Usuário legado: o próprio feed aceita ?user= e devolve o <yt:channelId>,
+//então esse caminho não depende do HTML do site
+function canalIdPeloUsuario(const Usuario: string; out CanalId: string): Boolean;
+var
+  feed: string;
+begin
+  Result := False;
+  CanalId := '';
+  if Trim(Usuario) = '' then Exit;
+  if not baixaTexto(URL_FEED_USER + TNetEncoding.URL.Encode(Usuario), feed) then Exit;
+  CanalId := valorTag(feed, 'yt:channelId');
+  Result := TRegEx.IsMatch(CanalId, '^' + RE_CANAL_ID + '$');
+  if not Result then CanalId := '';
 end;
 
 function ytResolveCanal(const Entrada: string; out CanalId: string): Boolean;
 var
   txt, html: string;
   candidatos: TArray<string>;
+  m: TMatch;
   i: Integer;
 begin
   Result := False;
@@ -149,15 +217,23 @@ begin
   CanalId := extraiCanalId(txt);
   if CanalId <> '' then Exit(True);
 
+  //Usuário legado, seja na URL colada ou como nome solto: tenta o feed antes
+  //de qualquer HTML
+  m := TRegEx.Match(txt, '/user/([\w.-]+)');
+  if m.Success then
+    if canalIdPeloUsuario(m.Groups[1].Value, CanalId) then Exit(True);
+
   if StartsText('http', txt) then
     candidatos := TArray<string>.Create(txt)
   else if StartsStr('@', txt) then
     candidatos := TArray<string>.Create(URL_CANAL + txt)
   else
-    //Sem pista do formato: handle, URL personalizada e usuário legado
+  begin
+    if canalIdPeloUsuario(txt, CanalId) then Exit(True);
+    //Sem pista do formato: handle e URL personalizada
     candidatos := TArray<string>.Create(URL_CANAL + '@' + txt,
-                                        URL_CANAL + 'c/' + txt,
-                                        URL_CANAL + 'user/' + txt);
+                                        URL_CANAL + 'c/' + txt);
+  end;
 
   for i := 0 to High(candidatos) do
     if baixaTexto(candidatos[i], html) then
@@ -165,16 +241,6 @@ begin
       CanalId := extraiCanalId(html);
       if CanalId <> '' then Exit(True);
     end;
-end;
-
-function valorTag(const Bloco, Tag: string): string;
-var
-  m: TMatch;
-begin
-  Result := '';
-  m := TRegEx.Match(Bloco, '<' + Tag + '[^>]*>(.*?)</' + Tag + '>', [roSingleLine]);
-  if m.Success then
-    Result := TNetEncoding.HTML.Decode(Trim(m.Groups[1].Value));
 end;
 
 function ytBuscaVideos(const CanalId: string; Maximo: Integer;
@@ -235,14 +301,40 @@ begin
   Result := Format(URL_THUMB, [VideoId]);
 end;
 
+function ytEhLinkYoutube(const Url: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(Trim(Url), RE_HOST_YT, [roIgnoreCase]);
+end;
+
 function ytVideoIdDeUrl(const Url: string): string;
+const
+  //Um formato por linha, todos terminando com (?![\w-]) para não cortar um
+  //texto maior no meio e devolver 11 caracteres que não são o vídeo
+  PADROES: array[0..3] of string = (
+    'youtu\.be/(' + RE_VIDEO_ID + ')(?![\w-])',
+    '/(?:embed|shorts|live|v|e)/(' + RE_VIDEO_ID + ')(?![\w-])',
+    '[?&]v=(' + RE_VIDEO_ID + ')(?![\w-])',
+    //Link de atribuição: a URL do vídeo vem codificada dentro do parâmetro u
+    '%3Fv%3D(' + RE_VIDEO_ID + ')(?![\w-])');
 var
+  txt: string;
+  i: Integer;
   m: TMatch;
 begin
   Result := '';
-  m := TRegEx.Match(Url, '(?:v=|youtu\.be/|/embed/|/shorts/|/live/)(' + RE_VIDEO_ID + ')');
-  if m.Success then
-    Result := m.Groups[1].Value;
+  txt := Trim(Url);
+  //Só endereço do YouTube: 'v=' e '/embed/' existem em muitos outros sites
+  if not ytEhLinkYoutube(txt) then Exit;
+
+  for i := Low(PADROES) to High(PADROES) do
+  begin
+    m := TRegEx.Match(txt, PADROES[i], [roIgnoreCase]);
+    if m.Success then
+    begin
+      Result := m.Groups[1].Value;
+      Exit;
+    end;
+  end;
 end;
 
 end.
