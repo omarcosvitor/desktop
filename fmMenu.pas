@@ -2227,6 +2227,10 @@ type
     ckMinimizaBandeja: TbsSkinCheckBox;
     naBandeja: Boolean;
 
+    //Transição entre versículos na projeção da Bíblia
+    cbBibliaTransicao: TbsSkinComboBox;
+    cbBibliaTransicaoVel: TbsSkinComboBox;
+
     const
       VERSAO_MIN_BD: integer = 140;
       fonte: string = 'Arial Rounded MT Bold';
@@ -2278,6 +2282,8 @@ type
     procedure ckIniciaWindowsClick(Sender: TObject);
     procedure ckMinimizaBandejaClick(Sender: TObject);
     procedure ApplicationMinimize(Sender: TObject);
+    procedure criaOpcoesBiblia;
+    procedure cbBibliaTransicaoChange(Sender: TObject);
 
     //Atalhos do YouTube no item de liturgia: link do vídeo e arquivo baixado
     procedure litBtYoutubeClick(Sender: TObject);
@@ -4995,12 +5001,111 @@ end;
 procedure TfmIndex.iniciaBandejaEOpcoes;
 begin
   criaOpcoesInicio;
+  criaOpcoesBiblia;
   criaBandeja;
 
   //Reserva dos canais fixados: baixa o que falta e apaga o que passou da
   //janela de retenção. Em segundo plano, para não segurar a abertura
   ytCacheDefineRaiz(dir_config + 'youtube' + PathDelim);
   ytCacheAtualizaAsync(ytCanaisFixos(lerParam('Liturgia', 'CanaisYoutubeFixos', '')));
+end;
+
+//Velocidades oferecidas para a transição, em milissegundos
+const
+  MS_TRANSICAO: array[0..2] of Integer = (200, 350, 600);
+
+procedure TfmIndex.criaOpcoesBiblia;
+var
+  gb: TbsSkinGroupBox;
+  lbl: TbsSkinStdLabel;
+  ms, i, escolhida: Integer;
+
+  function criaCombo(topo: Integer; const Itens: array of string): TbsSkinComboBox;
+  var
+    j: Integer;
+  begin
+    Result := TbsSkinComboBox.Create(Self);
+    Result.Parent := gb;
+    Result.SkinData := DM.bsSkinData1;
+    Result.SkinDataName := 'combobox';
+    Result.Style := bscbFixedStyle;   //só escolha, sem digitação
+    Result.Left := 105;
+    Result.Top := topo;
+    Result.Width := 118;
+    Result.Height := 20;
+    for j := Low(Itens) to High(Itens) do
+      Result.Items.Add(Itens[j]);
+    Result.OnChange := cbBibliaTransicaoChange;
+  end;
+
+  procedure criaRotulo(topo: Integer; const Texto: string);
+  begin
+    lbl := TbsSkinStdLabel.Create(Self);
+    lbl.Parent := gb;
+    lbl.SkinData := DM.bsSkinData1;
+    lbl.SkinDataName := 'stdlabel';
+    lbl.AutoSize := False;
+    lbl.Layout := tlCenter;
+    lbl.Left := 10;
+    lbl.Top := topo;
+    lbl.Width := 92;
+    lbl.Height := 20;
+    lbl.Caption := Texto;
+  end;
+
+begin
+  if Assigned(cbBibliaTransicao) then Exit;
+
+  //Mesmo desenho dos outros grupos da aba de formatação da Bíblia, criado em
+  //tempo de execução para não mexer no .dfm
+  gb := TbsSkinGroupBox.Create(Self);
+  gb.Parent := bsSkinScrollPanel1;
+  gb.SkinData := DM.bsSkinData1;
+  gb.SkinDataName := 'groupbox';
+  gb.CaptionMode := True;
+  gb.Caption := fIniciando.Translate('Transição');
+  gb.Height := 80;
+  gb.Top := bsSkinScrollPanel1.ClientHeight;  //entra no fim da pilha
+  gb.Align := alTop;
+
+  criaRotulo(26, fIniciando.Translate('Ao trocar:'));
+  cbBibliaTransicao := criaCombo(26, [fIniciando.Translate('Sem animação'),
+                                      fIniciando.Translate('Suave'),
+                                      fIniciando.Translate('Deslizar')]);
+
+  criaRotulo(52, fIniciando.Translate('Velocidade:'));
+  cbBibliaTransicaoVel := criaCombo(52, [fIniciando.Translate('Rápida'),
+                                         fIniciando.Translate('Média'),
+                                         fIniciando.Translate('Lenta')]);
+
+  cbBibliaTransicao.OnChange := nil;
+  cbBibliaTransicao.ItemIndex :=
+    EnsureRange(StrToIntDef(lerParam('Biblia', 'Transicao', '1'), 1), 0, 2);
+  cbBibliaTransicao.OnChange := cbBibliaTransicaoChange;
+
+  //A duração é gravada em milissegundos: a lista mostra a mais próxima
+  ms := StrToIntDef(lerParam('Biblia', 'TransicaoMs', '350'), 350);
+  escolhida := 1;
+  for i := Low(MS_TRANSICAO) to High(MS_TRANSICAO) do
+    if Abs(MS_TRANSICAO[i] - ms) < Abs(MS_TRANSICAO[escolhida] - ms) then
+      escolhida := i;
+
+  cbBibliaTransicaoVel.OnChange := nil;
+  cbBibliaTransicaoVel.ItemIndex := escolhida;
+  cbBibliaTransicaoVel.OnChange := cbBibliaTransicaoChange;
+end;
+
+procedure TfmIndex.cbBibliaTransicaoChange(Sender: TObject);
+var
+  i: Integer;
+begin
+  if carrega_opc then Exit;
+
+  gravaParam('Biblia', 'Transicao', IntToStr(Max(0, cbBibliaTransicao.ItemIndex)));
+
+  i := cbBibliaTransicaoVel.ItemIndex;
+  if (i < Low(MS_TRANSICAO)) or (i > High(MS_TRANSICAO)) then i := 1;
+  gravaParam('Biblia', 'TransicaoMs', IntToStr(MS_TRANSICAO[i]));
 end;
 
 procedure TfmIndex.ajustaBotoesYtItem(const item: string);
@@ -15196,7 +15301,13 @@ begin
       fMonitorBiblia.pnlBiblia.Invalidate;
       fMonitorBiblia.pnlBiblia.Repaint;
       ajustaImagem(fMonitorBiblia.imgBiblia,fMonitorBiblia.pnlBiblia,cbBibliaPosicaoFundo.ItemIndex+1);
+      //A superfície de desenho guarda o fundo pronto: trocada a imagem, ele
+      //precisa ser refeito
+      fMonitorBiblia.invalidaFundo;
     end;
+
+    //Entrega o texto à superfície, que anima a troca de passagem
+    fMonitorBiblia.defineTexto(lmdBibliaTxt.Caption, lmdBibliaInfo.Caption);
   end;
 
 
