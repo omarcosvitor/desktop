@@ -1923,7 +1923,10 @@ type
     //Reproduz em sequência os slides de uma pasta de coletânea personalizada
     procedure abreSlidesPasta(dir: string);
     procedure abreArquivoMusica(musicaID: Integer;album: string = '';url: string = '');
-    procedure player(url: string;video: Boolean = true);
+    //telaVideoOnline = reserva de um vídeo do YouTube: usa o monitor e a
+    //tela cheia configurados em "Vídeos Online", não os do player de arquivos
+    procedure player(url: string;video: Boolean = true;
+      telaVideoOnline: Boolean = false);
     function mciErroDeCodec(erro: DWORD): Boolean;
     function avisaCodecAusente: Boolean;
     procedure btInstalarCodecsClick(Sender: TObject);
@@ -2217,6 +2220,13 @@ type
     FLogChamadas: Integer;  // contador para checagem de truncamento do louvorja.log
     arquivo_recebido: string;  // caminho enviado por outra instância (WM_COPYDATA)
 
+    //Ícone na área de notificação e opções de início junto com o Windows
+    trayIcon: TTrayIcon;
+    trayMenu: TPopupMenu;
+    ckIniciaWindows: TbsSkinCheckBox;
+    ckMinimizaBandeja: TbsSkinCheckBox;
+    naBandeja: Boolean;
+
     const
       VERSAO_MIN_BD: integer = 140;
       fonte: string = 'Arial Rounded MT Bold';
@@ -2261,6 +2271,19 @@ type
     procedure completaColunasLivros;
     function livroEmBranco: Boolean;
 
+    procedure criaBandeja;
+    procedure criaOpcoesInicio;
+    procedure trayRestauraClick(Sender: TObject);
+    procedure traySairClick(Sender: TObject);
+    procedure ckIniciaWindowsClick(Sender: TObject);
+    procedure ckMinimizaBandejaClick(Sender: TObject);
+    procedure ApplicationMinimize(Sender: TObject);
+
+    //Atalhos do YouTube no item de liturgia: link do vídeo e arquivo baixado
+    procedure litBtYoutubeClick(Sender: TObject);
+    procedure litBtArquivoClick(Sender: TObject);
+    procedure ajustaBotoesYtItem(const item: string);
+
     //Helpers internos para acesso ao liturgia.ja (UTF-8 garantido + migração on-demand)
     function caminhoLiturgia: string;
     procedure garanteUtf8Liturgia;
@@ -2275,6 +2298,12 @@ type
     api_token: string;
 
     carrega_opc: Boolean;
+
+    //Preparo feito depois que os diretórios de dados já estão definidos
+    procedure iniciaBandejaEOpcoes;
+    procedure escondeNaBandeja;
+    procedure mostraDaBandeja;
+    function temInternet: Boolean;
 
     //Quem o painel pnlPlayer está controlando: 'MCI' para arquivo local,
     //'YOUTUBE' para vídeo online, vazio quando o painel está escondido.
@@ -2321,7 +2350,8 @@ uses
   fmMonitorPainelDinamico, fmMonitorCronometro,
   fmMonitorSorteio, fmMonitorCronometroCulto, fmMonitorBibliaBusca,
   fmMonitorBiblia, fmMonitorMenuMusicas, fmIdentificaMonitores,
-  fmCopiaLiturgiaDia, uInstanciaUnica, uYoutubeRSS;
+  fmCopiaLiturgiaDia, uInstanciaUnica, uYoutubeRSS, uYoutubeCache,
+  uInicioWindows;
 
 {$R *.dfm}
 
@@ -2379,6 +2409,7 @@ procedure TfmIndex.FormCreate(Sender: TObject);
 begin
   Application.OnDeactivate := ApplicationDeactivate;
   Application.OnActivate := ApplicationActivate;
+  Application.OnMinimize := ApplicationMinimize;
   InstalaGanchoRoda;
   SysUtils.FormatSettings.DecimalSeparator := '.';
 
@@ -4788,6 +4819,259 @@ begin
   Halt;
 end;
 
+{ ---------------------------------------------------------------------------
+  Início com o Windows, área de notificação e reserva de vídeos do YouTube
+  --------------------------------------------------------------------------- }
+
+const
+  //Índices de DM.ico_16x16 usados nos atalhos do item de liturgia
+  ICO_YT_LINK     = 82;  //marca do YouTube
+  ICO_YT_BAIXADO  = 86;  //seta verde: o vídeo está no computador
+  ICO_YT_PENDENTE = 15;  //seta comum: ainda não baixado
+
+function TfmIndex.temInternet: Boolean;
+var
+  flags: Cardinal;
+begin
+  Result := InternetGetConnectedState(@flags, 0);
+end;
+
+procedure TfmIndex.criaBandeja;
+var
+  item: TMenuItem;
+begin
+  if Assigned(trayIcon) then Exit;
+
+  trayMenu := TPopupMenu.Create(Self);
+
+  item := TMenuItem.Create(trayMenu);
+  item.Caption := fIniciando.Translate('Abrir');
+  item.Default := True;
+  item.OnClick := trayRestauraClick;
+  trayMenu.Items.Add(item);
+
+  item := TMenuItem.Create(trayMenu);
+  item.Caption := '-';
+  trayMenu.Items.Add(item);
+
+  item := TMenuItem.Create(trayMenu);
+  item.Caption := fIniciando.Translate('Sair');
+  item.OnClick := traySairClick;
+  trayMenu.Items.Add(item);
+
+  trayIcon := TTrayIcon.Create(Self);
+  if Application.Icon.Handle <> 0
+    then trayIcon.Icon.Assign(Application.Icon)
+    else trayIcon.Icon.Assign(Icon);
+  trayIcon.Hint := StrPas(TITULO);
+  trayIcon.PopupMenu := trayMenu;
+  trayIcon.OnDblClick := trayRestauraClick;
+  trayIcon.Visible := False;
+end;
+
+procedure TfmIndex.escondeNaBandeja;
+begin
+  criaBandeja;
+  naBandeja := True;
+  trayIcon.Visible := True;
+  Hide;
+  //O botão da barra de tarefas pertence à janela oculta do Application: sem
+  //escondê-la também, ele continuaria lá com a janela principal já fora
+  ShowWindow(Application.Handle, SW_HIDE);
+end;
+
+procedure TfmIndex.mostraDaBandeja;
+begin
+  ShowWindow(Application.Handle, SW_SHOW);
+  Application.Restore;
+  if WindowState = wsMinimized then WindowState := wsNormal;
+  Show;
+  SetForegroundWindow(Handle);
+  naBandeja := False;
+  if Assigned(trayIcon) then trayIcon.Visible := False;
+end;
+
+procedure TfmIndex.ApplicationMinimize(Sender: TObject);
+begin
+  if Assigned(ckMinimizaBandeja) and ckMinimizaBandeja.Checked then
+    escondeNaBandeja;
+end;
+
+procedure TfmIndex.trayRestauraClick(Sender: TObject);
+begin
+  mostraDaBandeja;
+end;
+
+procedure TfmIndex.traySairClick(Sender: TObject);
+begin
+  //Volta antes de fechar: o encerramento normal salva estado e conta com a
+  //janela montada
+  mostraDaBandeja;
+  Close;
+end;
+
+procedure TfmIndex.criaOpcoesInicio;
+
+  //Cada opção da aba de configurações é um painel alTop com o checkbox
+  //dentro; o mesmo desenho das que vêm do .dfm
+  function criaLinha(const Texto: string; Evento: TNotifyEvent): TbsSkinCheckBox;
+  var
+    pnl: TbsSkinPanel;
+  begin
+    pnl := TbsSkinPanel.Create(Self);
+    pnl.Parent := ScrollBox2;
+    pnl.SkinData := DM.bsSkinData1;
+    pnl.SkinDataName := 'panel';
+    pnl.Caption := '';
+    //Qualificado: Vcl.ExtCtrls declara outro bvNone, de outro tipo
+    pnl.BorderStyle := bsSkinCtrls.bvNone;
+    pnl.Height := 24;
+    pnl.Top := ScrollBox2.ClientHeight;  //entra no fim da pilha
+    pnl.Align := alTop;
+
+    Result := TbsSkinCheckBox.Create(Self);
+    Result.Parent := pnl;
+    Result.SkinData := DM.bsSkinData1;
+    Result.SkinDataName := 'checkbox';
+    Result.AlignWithMargins := True;
+    Result.Margins.Left := 36;
+    Result.Margins.Top := 0;
+    Result.Margins.Right := 0;
+    Result.Margins.Bottom := 0;
+    Result.Caption := Texto;
+    Result.WordWrap := True;
+    Result.Align := alClient;
+    Result.OnClick := Evento;
+  end;
+
+begin
+  if Assigned(ckIniciaWindows) then Exit;
+
+  ckIniciaWindows := criaLinha(fIniciando.Translate(
+    'Iniciar com o Windows, minimizado ao lado do relógio'), ckIniciaWindowsClick);
+  ckMinimizaBandeja := criaLinha(fIniciando.Translate(
+    'Ao minimizar, esconder ao lado do relógio (área de notificação)'),
+    ckMinimizaBandejaClick);
+
+  //O registro é a fonte da verdade do início automático: a entrada pode ter
+  //sido tirada por fora do programa
+  ckIniciaWindows.OnClick := nil;
+  ckIniciaWindows.Checked := IniciaComWindows;
+  ckIniciaWindows.OnClick := ckIniciaWindowsClick;
+
+  ckMinimizaBandeja.OnClick := nil;
+  if IniciaComWindows
+    then ckMinimizaBandeja.Checked := (lerParam('Config', 'MinimizarBandeja', '1') = '1')
+    else ckMinimizaBandeja.Checked := (lerParam('Config', 'MinimizarBandeja', '0') = '1');
+  ckMinimizaBandeja.OnClick := ckMinimizaBandejaClick;
+end;
+
+procedure TfmIndex.ckIniciaWindowsClick(Sender: TObject);
+begin
+  if not DefineIniciaComWindows(ckIniciaWindows.Checked) then
+  begin
+    Application.MessageBox(PChar(fIniciando.Translate(
+      'Não foi possível alterar o início automático do Windows.')),
+      TITULO, mb_ok + mb_iconerror);
+    ckIniciaWindows.OnClick := nil;
+    ckIniciaWindows.Checked := IniciaComWindows;
+    ckIniciaWindows.OnClick := ckIniciaWindowsClick;
+    Exit;
+  end;
+
+  //Subir com o Windows sem esconder ao minimizar deixaria a janela aberta na
+  //frente do usuário a cada boot
+  if ckIniciaWindows.Checked and (not ckMinimizaBandeja.Checked) then
+    ckMinimizaBandeja.Checked := True;
+end;
+
+procedure TfmIndex.ckMinimizaBandejaClick(Sender: TObject);
+begin
+  if ckMinimizaBandeja.Checked
+    then gravaParam('Config', 'MinimizarBandeja', '1')
+    else gravaParam('Config', 'MinimizarBandeja', '0');
+end;
+
+procedure TfmIndex.iniciaBandejaEOpcoes;
+begin
+  criaOpcoesInicio;
+  criaBandeja;
+
+  //Reserva dos canais fixados: baixa o que falta e apaga o que passou da
+  //janela de retenção. Em segundo plano, para não segurar a abertura
+  ytCacheDefineRaiz(dir_config + 'youtube' + PathDelim);
+  ytCacheAtualizaAsync(ytCanaisFixos(lerParam('Liturgia', 'CanaisYoutubeFixos', '')));
+end;
+
+procedure TfmIndex.ajustaBotoesYtItem(const item: string);
+var
+  btyt, btarq: TbsPngImageView;
+  url, videoId, arquivo: string;
+begin
+  btyt := TbsPngImageView(FindComponent(item + '_btyt'));
+  btarq := TbsPngImageView(FindComponent(item + '_btarq'));
+  if (btyt = nil) or (btarq = nil) then Exit;
+
+  videoId := '';
+  if (lerParam(item, 'tipo', '', arq_liturgia) = 'site') then
+  begin
+    url := lerParam(item, 'url', '', arq_liturgia);
+    if ytEhLinkYoutube(url) then videoId := ytVideoIdDeUrl(url);
+  end;
+
+  btyt.Visible := (videoId <> '');
+  btarq.Visible := (videoId <> '');
+  if videoId = '' then Exit;
+
+  btyt.Hint := fIniciando.Translate('Abrir o vídeo no YouTube');
+
+  arquivo := ytCacheArquivo(videoId);
+  if arquivo <> '' then
+  begin
+    //Verde: o arquivo está no computador e toca sem internet
+    btarq.ImageIndex := ICO_YT_BAIXADO;
+    btarq.Hint := fIniciando.Translate('Reproduzir o vídeo baixado') + ': ' +
+                  ExtractFileName(arquivo);
+  end
+  else
+  begin
+    btarq.ImageIndex := ICO_YT_PENDENTE;
+    btarq.Hint := fIniciando.Translate(
+      'Vídeo ainda não baixado. Marque "Fixar canal" ao editar o item.');
+  end;
+end;
+
+procedure TfmIndex.litBtYoutubeClick(Sender: TObject);
+var
+  url: string;
+begin
+  url := lerParam(TControl(Sender).Parent.Name, 'url', '', arq_liturgia);
+  if Trim(url) = '' then Exit;
+  //Atalho para a página do vídeo, no navegador padrão - não é a projeção
+  ShellExecute(Handle, 'open', PChar(url), nil, nil, SW_SHOWNORMAL);
+end;
+
+procedure TfmIndex.litBtArquivoClick(Sender: TObject);
+var
+  item, videoId, arquivo: string;
+begin
+  item := TControl(Sender).Parent.Name;
+  videoId := ytVideoIdDeUrl(lerParam(item, 'url', '', arq_liturgia));
+  if videoId = '' then Exit;
+
+  arquivo := ytCacheArquivo(videoId);
+  if arquivo = '' then
+  begin
+    Application.MessageBox(PChar(fIniciando.Translate(
+      'Este vídeo ainda não foi baixado. Marque "Fixar canal" ao editar o item para guardar os últimos vídeos do canal.')),
+      TITULO, mb_ok + MB_ICONINFORMATION);
+    Exit;
+  end;
+
+  //Mesma tela do vídeo online: monitor e tela cheia de "Vídeos Online"
+  player(arquivo, True, True);
+end;
+
 procedure TfmIndex.WndProc(var Message: TMessage);
 var
   dados: PCopyDataStruct;
@@ -4795,7 +5079,12 @@ begin
   if (WM_LOUVORJA_RESTAURA <> 0)
     and (Message.Msg = WM_LOUVORJA_RESTAURA)
     and (Cardinal(Message.WParam) = IdInstanciaUnica) then
+  begin
+    //Escondida na bandeja a janela não está visível, e TrazJanelaParaFrente
+    //sai sem fazer nada: primeiro ela precisa voltar
+    if naBandeja then mostraDaBandeja;
     TrazJanelaParaFrente(Self);
+  end;
 
   //Arquivo aberto pelo Windows enquanto o programa já estava rodando: a outra
   //instância entrega o caminho aqui em vez de tentar abrir uma segunda cópia
@@ -6036,7 +6325,27 @@ begin
     image := TbsPngImageView(CopyComponent(lit_modItem_btedit,panel,item+'_btedit'));
     image.OnClick := lit_modItem_btedit.OnClick;
     image.Visible := not cbBloqItens.Checked;
-    CopyComponent(lit_modItem_divider,panel,item+'_divider');
+
+    //Atalhos do vídeo do YouTube, à esquerda do lápis: o primeiro abre a
+    //página do vídeo, o segundo reproduz o arquivo baixado. Copiados do
+    //próprio lápis para herdar tamanho, alinhamento e a marca 9999, que os
+    //preserva quando o item é recarregado. O Left decide a ordem dos
+    //alinhados à direita
+    image := TbsPngImageView(CopyComponent(lit_modItem_btedit,panel,item+'_btyt'));
+    image.Left := 969;
+    image.ImageIndex := ICO_YT_LINK;
+    image.OnClick := litBtYoutubeClick;
+    image.ShowHint := True;
+    image.Visible := False;
+
+    image := TbsPngImageView(CopyComponent(lit_modItem_btedit,panel,item+'_btarq'));
+    image.Left := 942;
+    image.ImageIndex := ICO_YT_PENDENTE;
+    image.OnClick := litBtArquivoClick;
+    image.ShowHint := True;
+    image.Visible := False;
+
+    TControl(CopyComponent(lit_modItem_divider,panel,item+'_divider')).Left := 927;
   end;
 
   if (tipo <> 'categoria') then
@@ -6183,6 +6492,10 @@ begin
   else
   if (tipo = 'itensagendados')
     then TbsPngImageView(FindComponent(item+'_bticon_img')).ImageIndex := 83;
+
+  //Atalhos do YouTube: só aparecem em item de link para vídeo, e o ícone do
+  //arquivo muda de acordo com o que já está baixado
+  ajustaBotoesYtItem(item);
 
   if (ordem > 0) then
     panel.Top := (panel.Height + 20) * (ordem + 3);
@@ -7712,16 +8025,21 @@ begin
   end
   else if (lerParam(item, 'tipo', '', arq_liturgia) = 'site') then
   begin
-    if (sbVideoOnAbreLiturgia.ItemIndex = 1) then
-    begin
-      //Reconhece watch, youtu.be, shorts, live e embed - antes só abria no
-      //player quando a URL tinha 'v=', deixando o link curto de fora
-      subitem := ytVideoIdDeUrl(lerParam(item, 'url', '', arq_liturgia));
-      if (subitem <> '')
-        then abreVideoOn(subitem, lerParam(item, 'item', '0', arq_liturgia))
-        else abrirArquivo(lerParam(item, 'url', '', arq_liturgia));
-    end
-    else abrirArquivo(lerParam(item, 'url', '', arq_liturgia));
+    //Reconhece watch, youtu.be, shorts, live e embed - antes só abria no
+    //player quando a URL tinha 'v=', deixando o link curto de fora
+    subitem := ytVideoIdDeUrl(lerParam(item, 'url', '', arq_liturgia));
+
+    //Sem internet o vídeo baixado do canal fixado entra no lugar do player
+    //online, na mesma tela cheia do monitor de vídeos online
+    txt := '';
+    if (subitem <> '') and (not temInternet) then txt := ytCacheArquivo(subitem);
+
+    if (txt <> '') then
+      player(txt, True, True)
+    else if (sbVideoOnAbreLiturgia.ItemIndex = 1) and (subitem <> '') then
+      abreVideoOn(subitem, lerParam(item, 'item', '0', arq_liturgia))
+    else
+      abrirArquivo(lerParam(item, 'url', '', arq_liturgia));
   end
   else if (lerParam(item, 'tipo', '', arq_liturgia) = 'arquivo') then
   begin
@@ -8838,7 +9156,9 @@ begin
 
   if (video) then
   begin
-      monitor := strtoint(lerParam('Player', 'Monitor', '2'));
+    if telaVideoOnline
+      then monitor := strtoint(lerParam('Videos Online', 'Monitor', '2'))
+      else monitor := strtoint(lerParam('Player', 'Monitor', '2'));
     if (Screen.MonitorCount < monitor) then
       monitor := 0
     else
@@ -8846,7 +9166,8 @@ begin
 
     fIniciando.AppCreateForm(TfPlayer, fPlayer);
 
-    if ckPlayerTelaCheia.Checked then
+    if (telaVideoOnline and ckVideoOnJanela.Checked) or
+       ((not telaVideoOnline) and ckPlayerTelaCheia.Checked) then
       fPlayer.BorderStyle := bsNone
     else
       fPlayer.BorderStyle := bsSizeable;

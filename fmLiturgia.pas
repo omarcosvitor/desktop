@@ -97,12 +97,16 @@ type
     pnlYt: TbsSkinPanel;
     pnlChipsYt: TbsSkinPanel;
     edtCanalYt: TbsSkinEdit;
+    chkFixaYt: TbsSkinCheckBox;
     btBuscaYt: TbsSkinSpeedButton;
     lblStatusYt: TbsSkinStdLabel;
     lstVideosYt: TListBox;
     tmrAutoYt: TTimer;
     videosYt: TObjectList<TItemVideoYt>;
     canaisYt: TStringList;   // 'UCxxx=Nome', mais recente primeiro
+    //Id do canal da última busca bem-sucedida: o campo de texto aceita
+    //@handle e link, que não servem para fixar nem para nomear a pasta
+    canalIdYt: string;
     buscandoYt: Boolean;
     cancelaYt: Boolean;
     autoBuscaYt: Boolean;
@@ -115,6 +119,8 @@ type
     procedure montaChipsYt;
     procedure carregaCanaisYt;
     procedure salvaCanalYt(const CanalId, Nome: string);
+    procedure atualizaFixaYt;
+    procedure chkFixaYtClick(Sender: TObject);
     procedure buscaCanalYt(const Entrada: string);
     procedure carregaMiniaturasYt;
     procedure limpaVideosYt;
@@ -144,7 +150,7 @@ implementation
 {$R *.dfm}
 
 uses fmMenu, fmBuscaMusica, dmComponentes, fmIniciando, uYoutubeRSS,
-  System.Math, Vcl.Imaging.jpeg;
+  uYoutubeCache, System.Math, Vcl.Imaging.jpeg;
 
 const
   //Miniatura 16:9 reduzida: o suficiente para reconhecer o vídeo sem pesar a
@@ -692,6 +698,21 @@ begin
   btBuscaYt.Align := alRight;
   btBuscaYt.OnClick := btBuscaYtClick;
 
+  chkFixaYt := TbsSkinCheckBox.Create(Self);
+  chkFixaYt.Parent := pnlLinha;
+  chkFixaYt.SkinData := DM.bsSkinData1;
+  chkFixaYt.SkinDataName := 'checkbox';
+  chkFixaYt.Caption := 'Fixar canal';
+  chkFixaYt.Width := 110;
+  chkFixaYt.AlignWithMargins := True;
+  chkFixaYt.Margins.Right := 8;
+  chkFixaYt.Align := alRight;
+  chkFixaYt.Hint := 'Mantém no computador os ' + IntToStr(YT_CACHE_VIDEOS) +
+                    ' últimos vídeos do canal, por ' + IntToStr(YT_CACHE_DIAS) +
+                    ' dias, para uso sem internet';
+  chkFixaYt.ShowHint := True;
+  chkFixaYt.OnClick := chkFixaYtClick;
+
   edtCanalYt := TbsSkinEdit.Create(Self);
   edtCanalYt.Parent := pnlLinha;
   edtCanalYt.SkinData := DM.bsSkinData1;
@@ -766,6 +787,13 @@ begin
   if (Trim(ultimo) = '') and (canaisYt.Count > 0) then
     ultimo := canaisYt.Names[0];
   edtCanalYt.Text := ultimo;
+
+  //O parâmetro guarda o id; quando é ele que está no campo, o estado de
+  //fixado já pode ser mostrado antes de qualquer busca
+  canalIdYt := '';
+  if ytIdCanalValido(Trim(ultimo)) then
+    canalIdYt := Trim(ultimo);
+  atualizaFixaYt;
 end;
 
 procedure TfLiturgia.salvaCanalYt(const CanalId, Nome: string);
@@ -799,22 +827,90 @@ begin
   montaChipsYt;
 end;
 
+procedure TfLiturgia.atualizaFixaYt;
+var
+  fixo: Boolean;
+begin
+  if not Assigned(chkFixaYt) then Exit;
+
+  fixo := (canalIdYt <> '') and
+          ytCanalFixo(fmIndex.lerParam('Liturgia', 'CanaisYoutubeFixos', ''), canalIdYt);
+
+  //Sem o desvio o próprio ajuste dispararia o OnClick e regravaria a lista
+  chkFixaYt.OnClick := nil;
+  try
+    chkFixaYt.Checked := fixo;
+  finally
+    chkFixaYt.OnClick := chkFixaYtClick;
+  end;
+end;
+
+procedure TfLiturgia.chkFixaYtClick(Sender: TObject);
+var
+  lista: string;
+  marcado: Boolean;
+begin
+  marcado := chkFixaYt.Checked;
+
+  //Fixar exige o id do canal, e ele só existe depois da busca
+  if canalIdYt = '' then
+  begin
+    buscaCanalYt(edtCanalYt.Text);
+    if canalIdYt = '' then
+    begin
+      atualizaFixaYt;
+      Exit;
+    end;
+  end;
+
+  lista := ytAlternaCanalFixo(
+    fmIndex.lerParam('Liturgia', 'CanaisYoutubeFixos', ''), canalIdYt, marcado);
+  fmIndex.gravaParam('Liturgia', 'CanaisYoutubeFixos', lista);
+  montaChipsYt;
+  //A busca acima pode ter refeito o estado do controle: sincroniza com o que
+  //acabou de ser gravado
+  atualizaFixaYt;
+
+  if marcado then
+  begin
+    if ytCacheYtDlp = '' then
+      statusYt('Canal fixado. O download exige o yt-dlp.exe na pasta "tools" do programa.')
+    else if ytCacheOcupado then
+      //Uma fila por vez: este canal entra na próxima passada
+      statusYt('Canal fixado. Os vídeos entram na fila assim que a atual terminar.')
+    else
+    begin
+      statusYt('Canal fixado. Baixando os últimos vídeos em segundo plano...');
+      ytCacheAtualizaAsync([canalIdYt]);
+    end;
+  end
+  else
+    //A limpeza roda na mesma fila: o canal sai da lista e os arquivos dele
+    //deixam de ser renovados, então basta pedir a atualização do que sobrou
+    ytCacheAtualizaAsync(ytCanaisFixos(lista));
+end;
+
 procedure TfLiturgia.montaChipsYt;
 var
   i, esq: Integer;
   chip: TbsSkinSpeedButton;
-  nome: string;
+  nome, fixos: string;
 begin
   if not Assigned(pnlChipsYt) then Exit;
 
   for i := pnlChipsYt.ControlCount - 1 downto 0 do
     pnlChipsYt.Controls[i].Free;
 
+  fixos := fmIndex.lerParam('Liturgia', 'CanaisYoutubeFixos', '');
+
   esq := 10;
   for i := 0 to canaisYt.Count - 1 do
   begin
     nome := canaisYt.ValueFromIndex[i];
     if Trim(nome) = '' then nome := canaisYt.Names[i];
+    //Asterisco marca o canal fixo: o botão é desenhado pela skin, então
+    //mudar fonte ou cor aqui não teria efeito garantido
+    if ytCanalFixo(fixos, canaisYt.Names[i]) then nome := nome + ' *';
 
     chip := TbsSkinSpeedButton.Create(Self);
     chip.Parent := pnlChipsYt;
@@ -867,6 +963,7 @@ begin
     Exit;
   end;
 
+  canalIdYt := '';
   buscandoYt := True;
   cancelaYt := False;
   btBuscaYt.Enabled := False;
@@ -901,6 +998,8 @@ begin
       lstVideosYt.Items.AddObject(item.Titulo, item);
     end;
 
+    canalIdYt := canal_id;
+    atualizaFixaYt;
     if Trim(canal_nome) = '' then canal_nome := canal_id;
     statusYt(canal_nome + ' - ' + IntToStr(lstVideosYt.Items.Count) +
              ' vídeo(s). Clique para usar.');
