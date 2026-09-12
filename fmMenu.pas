@@ -2325,12 +2325,6 @@ type
 
     carrega_opc: Boolean;
 
-    //Preparo feito depois que os diretórios de dados já estão definidos
-    procedure iniciaBandejaEOpcoes;
-    procedure escondeNaBandeja;
-    procedure mostraDaBandeja;
-    function temInternet: Boolean;
-
     //Quem o painel pnlPlayer está controlando: 'MCI' para arquivo local,
     //'YOUTUBE' para vídeo online, vazio quando o painel está escondido.
     //Sem isso os botões mandariam comando para o MediaPlayer1 mesmo com um
@@ -2356,6 +2350,12 @@ type
 
     externo: Boolean;
 
+    //Preparo feito depois que os diretórios de dados já estão definidos
+    procedure iniciaBandejaEOpcoes;
+    procedure escondeNaBandeja;
+    procedure mostraDaBandeja;
+    function temInternet: Boolean;
+
   end;
 
 var
@@ -2368,6 +2368,7 @@ var
 implementation
 
 uses
+  bsUtils,
   fmLetra, fmAtualiza, StrUtils, Math, fmNovaVersao,
   fmHelp, fmVideoOn, fmFavoritos, fmMusica, fmListaMusica,
   fmMusicaOperador, fmLiturgia, fmArquivosFalta, fmBuscaMusica, fmArquivosExcesso,
@@ -5372,7 +5373,7 @@ var
     Result.ShowCaption := True;
     Result.Transparent := True;
     Result.Flat := True;
-    if Grande then Result.Layout := blGlyphTop;
+    if Grande then Result.Layout := bsUtils.blGlyphTop;
     Result.SetBounds(esq, topo, larg, alt);
     Result.OnClick := Evento;
   end;
@@ -9629,7 +9630,7 @@ begin
   ShellExecute(handle, nil, PChar(URL_CODECS), nil, nil, SW_MAXIMIZE);
 end;
 
-procedure TfmIndex.player(url: string;video: Boolean);
+procedure TfmIndex.player(url: string;video: Boolean;telaVideoOnline: Boolean);
 var
   monitor, i: integer;
   erro: cardinal;

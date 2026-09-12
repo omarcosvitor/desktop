@@ -158,11 +158,11 @@ begin
           Exit(pasta + busca.Name);
         until FindNext(busca) <> 0;
       finally
-        FindClose(busca);
+        System.SysUtils.FindClose(busca);
       end;
     until FindNext(buscaCanal) <> 0;
   finally
-    FindClose(buscaCanal);
+    System.SysUtils.FindClose(buscaCanal);
   end;
 end;
 
@@ -187,11 +187,11 @@ begin
           Result := Result + busca.Size;
         until FindNext(busca) <> 0;
       finally
-        FindClose(busca);
+        System.SysUtils.FindClose(busca);
       end;
     until FindNext(buscaCanal) <> 0;
   finally
-    FindClose(buscaCanal);
+    System.SysUtils.FindClose(buscaCanal);
   end;
 end;
 
@@ -431,7 +431,7 @@ begin
       System.SysUtils.DeleteFile(Pasta + busca.Name);
     until FindNext(busca) <> 0;
   finally
-    FindClose(busca);
+    System.SysUtils.FindClose(busca);
   end;
 
   ini := TIniFile.Create(Pasta + ARQ_INDICE);
