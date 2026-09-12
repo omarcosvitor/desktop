@@ -948,6 +948,8 @@ type
     Label8: TLabel;
     vlSorteio: TValueListEditor;
     vlSorteados: TValueListEditor;
+    vlSorteioNM: TValueListEditor;
+    vlSorteadosNM: TValueListEditor;
     stHinos: TbsSkinStatusBar;
     stHinos0: TbsSkinStatusPanel;
     stHinos1: TbsSkinStatusPanel;

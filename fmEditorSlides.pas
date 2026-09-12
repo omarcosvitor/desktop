@@ -60,6 +60,8 @@ type
     corLetra_aux: TbsSkinColorButton;
     bsSkinStdLabel1: TbsSkinStdLabel;
     bsSkinStdLabel2: TbsSkinStdLabel;
+    bsSkinStdLabel3: TbsSkinStdLabel;
+    bsSkinStdLabel4: TbsSkinStdLabel;
     bsSkinStdLabel5: TbsSkinLabel;
     bsSkinStdLabel6: TbsSkinLabel;
     GridPanel4: TGridPanel;
