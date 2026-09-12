@@ -45,6 +45,7 @@ uses
   uYoutubeRSS in 'uYoutubeRSS.pas',
   uYoutubeCache in 'uYoutubeCache.pas',
   uInicioWindows in 'uInicioWindows.pas',
+  uFundoMusical in 'uFundoMusical.pas',
   uInstanciaUnica in 'uInstanciaUnica.pas';
 
 {$R *.res}
