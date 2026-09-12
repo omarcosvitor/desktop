@@ -2,7 +2,6 @@ program LouvorJA;
 
 uses
   ShareMem,
-  XPMan,
   Forms,
   fmMenu in 'fmMenu.pas' {fmIndex},
   fmLetra in 'fmLetra.pas' {fLetra},
@@ -43,7 +42,6 @@ uses
   DelphiZXingQRCode in 'components\DelphiZXingQRCode\DelphiZXingQRCode.pas',
   fmQRCode in 'fmQRCode.pas',
   uYoutubeRSS in 'uYoutubeRSS.pas',
-  uYoutubeCache in 'uYoutubeCache.pas',
   uInicioWindows in 'uInicioWindows.pas',
   uFundoMusical in 'uFundoMusical.pas',
   uInstanciaUnica in 'uInstanciaUnica.pas';

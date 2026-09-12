@@ -268,7 +268,6 @@
         <DCCReference Include="components\DelphiZXingQRCode\DelphiZXingQRCode.pas"/>
         <DCCReference Include="fmQRCode.pas"/>
         <DCCReference Include="uYoutubeRSS.pas"/>
-        <DCCReference Include="uYoutubeCache.pas"/>
         <DCCReference Include="uInicioWindows.pas"/>
         <DCCReference Include="uFundoMusical.pas"/>
         <DCCReference Include="uInstanciaUnica.pas"/>

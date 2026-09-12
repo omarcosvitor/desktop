@@ -2235,10 +2235,9 @@ type
 
     //Fundo musical do apelo
     btFundoMusTocar: TbsSkinSpeedButton;
-    lblFundoMus: TbsSkinStdLabel;
+    grpFundoMus: TbsRibbonGroup;
     ckFundoMusRepetir: TbsSkinCheckBox;
     cbFundoMusVolume: TbsSkinComboBox;
-    btRibFundoMus: TbsRibbonButtonItem;
     tmrFundoMus: TTimer;
 
     const
@@ -2257,8 +2256,6 @@ type
     procedure WMDropFiles(var Msg: TWMDropFiles); message WM_DROPFILES;
 
 
-    //Atende o pedido de outra instância para trazer esta janela para frente
-    procedure WndProc(var Message: TMessage); override;
 
     //Define as ações para quando perder ou receber o foco
     procedure ApplicationDeactivate(Sender: TObject);
@@ -2310,11 +2307,16 @@ type
     procedure litBtYoutubeClick(Sender: TObject);
     procedure litBtArquivoClick(Sender: TObject);
     procedure ajustaBotoesYtItem(const item: string);
+    function litArquivoVideo(const item: string): string;
 
     //Helpers internos para acesso ao liturgia.ja (UTF-8 garantido + migração on-demand)
     function caminhoLiturgia: string;
     procedure garanteUtf8Liturgia;
     function abreIniLiturgia: TMemIniFile;
+
+  protected
+    //Atende o pedido de outra instância para trazer esta janela para frente
+    procedure WndProc(var Message: TMessage); override;
 
   public
     { Public declarations }
@@ -2378,7 +2380,7 @@ uses
   fmMonitorPainelDinamico, fmMonitorCronometro,
   fmMonitorSorteio, fmMonitorCronometroCulto, fmMonitorBibliaBusca,
   fmMonitorBiblia, fmMonitorMenuMusicas, fmIdentificaMonitores,
-  fmCopiaLiturgiaDia, uInstanciaUnica, uYoutubeRSS, uYoutubeCache,
+  fmCopiaLiturgiaDia, uInstanciaUnica, uYoutubeRSS,
   uInicioWindows, uFundoMusical;
 
 {$R *.dfm}
@@ -3063,8 +3065,6 @@ end;
 procedure TfmIndex.txtHinoChange(Sender: TObject);
 var
   valor: string;
-  nr: integer;
-  c: integer;
   letra: string;
 begin
   pnlreHino.Visible := False;
@@ -3074,8 +3074,7 @@ begin
   stHinos0.Caption := '';
   if trim(valor) <> '' then
   begin
-    val(txtHino.Text, nr, c);
-    if c = 0 then
+    if StrToIntDef(valor, 0) > 0 then
     begin
       stHinos0.Caption := fIniciando.Translate('Buscando nº: ') + valor;
     end
@@ -3215,8 +3214,6 @@ end;
 procedure TfmIndex.txtHinoNChange(Sender: TObject);
 var
   valor: string;
-  nr: integer;
-  c: integer;
   letra: string;
 begin
   pnlreHinoN.Visible := False;
@@ -3226,8 +3223,7 @@ begin
   stHinos0N.Caption := '';
   if trim(valor) <> '' then
   begin
-    val(txtHinoN.Text, nr, c);
-    if c = 0 then
+    if StrToIntDef(valor, 0) > 0 then
     begin
       stHinos0N.Caption := fIniciando.Translate('Buscando nº: ') + valor;
     end
@@ -4249,7 +4245,7 @@ begin
       fileStream.Free;
     end;
   except
-    lista.LoadFromStream(fileStream);
+    lista.Clear;
   end;
 
   Result := lista;
@@ -4315,8 +4311,6 @@ var
   txt: TStringList;
   sql: string;
   i: integer;
-  dir: string;
-  QUERY: TFDQuery;
 begin
   if not InternetGetConnectedState(@Flags, 0) then
   begin
@@ -5029,11 +5023,6 @@ begin
   criaOpcoesBiblia;
   criaFundoMusical;
   criaBandeja;
-
-  //Reserva dos canais fixados: baixa o que falta e apaga o que passou da
-  //janela de retenção. Em segundo plano, para não segurar a abertura
-  ytCacheDefineRaiz(dir_config + 'youtube' + PathDelim);
-  ytCacheAtualizaAsync(ytCanaisFixos(lerParam('Liturgia', 'CanaisYoutubeFixos', '')));
 end;
 
 //Velocidades oferecidas para a transição, em milissegundos
@@ -5142,11 +5131,9 @@ const
   //Ícones de DM.ico_40x40 usados no botão grande da aba
   ICO_FUNDO_TOCAR = 20;   //triângulo azul
   ICO_FUNDO_PARAR = 21;   //quadrado vermelho
-  //Ícones de DM.ico_16x16 usados no botão de acesso rápido e nos menores
-  ICO_RIB_TOCAR   = 7;
-  ICO_RIB_PARAR   = 65;
-  ICO_FUNDO_HINO  = 1;
-  ICO_FUNDO_ARQ   = 10;
+  //Ícones de DM.ico_24x24 usados nos botões menores
+  ICO_FUNDO_HINO  = 60;
+  ICO_FUNDO_ARQ   = 3;
 
 function TfmIndex.fundoMusDescricao: string;
 begin
@@ -5205,7 +5192,6 @@ begin
 
   tocando := fmusTocando;
   desc := fundoMusDescricao;
-  if desc = '' then desc := fIniciando.Translate('(nenhum escolhido)');
 
   if tocando then
   begin
@@ -5219,24 +5205,10 @@ begin
   end;
   btFundoMusTocar.Repaint;
 
-  lblFundoMus.Caption := desc;
-
-  if Assigned(btRibFundoMus) then
-  begin
-    //Em outra aba, o ícone é o único aviso de que o fundo está no ar
-    if tocando then
-    begin
-      btRibFundoMus.ImageIndex := ICO_RIB_PARAR;
-      btRibFundoMus.Hint := fIniciando.Translate('Parar o fundo musical');
-    end
-    else
-    begin
-      btRibFundoMus.ImageIndex := ICO_RIB_TOCAR;
-      btRibFundoMus.Hint := fIniciando.Translate('Tocar o fundo musical') +
-                            ': ' + desc;
-    end;
-    bsRibbon1.Invalidate;
-  end;
+  if desc = ''
+    then grpFundoMus.Caption := fIniciando.Translate('Fundo musical')
+    else grpFundoMus.Caption := fIniciando.Translate('Fundo musical') +
+                                ' - ' + desc;
 end;
 
 procedure TfmIndex.fundoMusAlterna(Sender: TObject);
@@ -5353,7 +5325,6 @@ end;
 
 procedure TfmIndex.criaFundoMusical;
 var
-  grupo, grupoOpc: TbsRibbonGroup;
   lbl: TbsSkinStdLabel;
   i, vol: Integer;
 
@@ -5364,16 +5335,20 @@ var
     Result := TbsSkinSpeedButton.Create(Self);
     Result.Parent := pai;
     Result.SkinData := DM.bsSkinData1;
-    if Grande
-      then Result.SkinDataName := 'resizetoolbutton'
-      else Result.SkinDataName := 'toolbutton';
+    Result.SkinDataName := 'resizetoolbutton';
     Result.ImageList := Imagens;
     Result.ImageIndex := Indice;
     Result.Caption := Texto;
     Result.ShowCaption := True;
     Result.Transparent := True;
     Result.Flat := True;
-    if Grande then Result.Layout := bsUtils.blGlyphTop;
+    if Grande then
+      Result.Layout := bsUtils.blGlyphTop
+    else
+    begin
+      Result.Margin := 5;
+      Result.Spacing := 1;
+    end;
     Result.SetBounds(esq, topo, larg, alt);
     Result.OnClick := Evento;
   end;
@@ -5381,76 +5356,51 @@ var
 begin
   if Assigned(btFundoMusTocar) then Exit;
 
-  grupo := TbsRibbonGroup.Create(Self);
-  grupo.Parent := bsUtilitarios;
-  grupo.SkinData := DM.bsSkinData1;
-  grupo.SkinDataName := 'officegroup';
-  grupo.Caption := fIniciando.Translate('Fundo musical');
-  grupo.Width := 340;
-  grupo.Align := alLeft;
+  grpFundoMus := TbsRibbonGroup.Create(Self);
+  grpFundoMus.Parent := bsUtilitarios;
+  grpFundoMus.SkinData := DM.bsSkinData1;
+  grpFundoMus.SkinDataName := 'officegroup';
+  grpFundoMus.Width := 560;
+  grpFundoMus.Left := bsUtilitarios.Width;
+  grpFundoMus.Align := alLeft;
 
-  btFundoMusTocar := criaBotao(grupo, 2, 2, 96, 65,
+  btFundoMusTocar := criaBotao(grpFundoMus, 2, 2, 96, 65,
     fIniciando.Translate('Tocar'), DM.ico_40x40, ICO_FUNDO_TOCAR,
     fundoMusAlterna, True);
 
-  criaBotao(grupo, 104, 4, 226, 22, fIniciando.Translate('Hino do programa...'),
-    DM.ico_16x16, ICO_FUNDO_HINO, fundoMusEscolheHino, False);
-  criaBotao(grupo, 104, 28, 226, 22,
-    fIniciando.Translate('Arquivo do computador...'), DM.ico_16x16,
+  criaBotao(grpFundoMus, 100, 2, 230, 32,
+    fIniciando.Translate('Hino do programa...'), DM.ico_24x24,
+    ICO_FUNDO_HINO, fundoMusEscolheHino, False);
+  criaBotao(grpFundoMus, 100, 34, 230, 33,
+    fIniciando.Translate('Arquivo do computador...'), DM.ico_24x24,
     ICO_FUNDO_ARQ, fundoMusEscolheArquivo, False);
 
-  lblFundoMus := TbsSkinStdLabel.Create(Self);
-  lblFundoMus.Parent := grupo;
-  lblFundoMus.SkinData := DM.bsSkinData1;
-  lblFundoMus.SkinDataName := 'stdlabel';
-  lblFundoMus.AutoSize := False;
-  lblFundoMus.Layout := tlCenter;
-  lblFundoMus.SetBounds(104, 52, 226, 18);
-
-  grupoOpc := TbsRibbonGroup.Create(Self);
-  grupoOpc.Parent := bsUtilitarios;
-  grupoOpc.SkinData := DM.bsSkinData1;
-  grupoOpc.SkinDataName := 'officegroup';
-  grupoOpc.Caption := fIniciando.Translate('Opções');
-  grupoOpc.Width := 190;
-  grupoOpc.Align := alLeft;
-
   ckFundoMusRepetir := TbsSkinCheckBox.Create(Self);
-  ckFundoMusRepetir.Parent := grupoOpc;
+  ckFundoMusRepetir.Parent := grpFundoMus;
   ckFundoMusRepetir.SkinData := DM.bsSkinData1;
   ckFundoMusRepetir.SkinDataName := 'checkbox';
   ckFundoMusRepetir.Caption := fIniciando.Translate('Repetir sem parar');
-  ckFundoMusRepetir.SetBounds(10, 8, 170, 20);
+  ckFundoMusRepetir.SetBounds(340, 10, 210, 20);
   ckFundoMusRepetir.OnClick := fundoMusOpcaoMudou;
 
   lbl := TbsSkinStdLabel.Create(Self);
-  lbl.Parent := grupoOpc;
+  lbl.Parent := grpFundoMus;
   lbl.SkinData := DM.bsSkinData1;
   lbl.SkinDataName := 'stdlabel';
   lbl.AutoSize := False;
   lbl.Layout := tlCenter;
   lbl.Caption := fIniciando.Translate('Volume:');
-  lbl.SetBounds(10, 36, 55, 20);
+  lbl.SetBounds(340, 38, 55, 20);
 
   cbFundoMusVolume := TbsSkinComboBox.Create(Self);
-  cbFundoMusVolume.Parent := grupoOpc;
+  cbFundoMusVolume.Parent := grpFundoMus;
   cbFundoMusVolume.SkinData := DM.bsSkinData1;
   cbFundoMusVolume.SkinDataName := 'combobox';
   cbFundoMusVolume.Style := bscbFixedStyle;
-  cbFundoMusVolume.SetBounds(68, 36, 70, 20);
+  cbFundoMusVolume.SetBounds(398, 38, 70, 20);
   for i := 1 to 10 do
     cbFundoMusVolume.Items.Add(IntToStr(i * 10) + '%');
   cbFundoMusVolume.OnChange := fundoMusOpcaoMudou;
-
-  //Botão de acesso rápido no alto da janela: toca e para sem sair da aba em
-  //que o culto está sendo operado
-  bsRibbon1.ButtonsShowHint := True;
-  btRibFundoMus := bsRibbon1.Buttons.Add;
-  btRibFundoMus.ImageIndex := ICO_RIB_TOCAR;
-  btRibFundoMus.Caption := fIniciando.Translate('Fundo Musical');
-  btRibFundoMus.Enabled := True;
-  btRibFundoMus.Visible := True;
-  btRibFundoMus.OnClick := fundoMusAlterna;
 
   tmrFundoMus := TTimer.Create(Self);
   tmrFundoMus.Enabled := False;
@@ -5491,7 +5441,7 @@ begin
 
   btyt.Hint := fIniciando.Translate('Abrir o vídeo no YouTube');
 
-  arquivo := ytCacheArquivo(videoId);
+  arquivo := litArquivoVideo(item);
   if arquivo <> '' then
   begin
     //Verde: o arquivo está no computador e toca sem internet
@@ -5503,7 +5453,7 @@ begin
   begin
     btarq.ImageIndex := ICO_YT_PENDENTE;
     btarq.Hint := fIniciando.Translate(
-      'Vídeo ainda não baixado. Marque "Fixar canal" ao editar o item.');
+      'Escolher no computador o arquivo deste vídeo, para tocar sem internet');
   end;
 end;
 
@@ -5517,21 +5467,27 @@ begin
   ShellExecute(Handle, 'open', PChar(url), nil, nil, SW_SHOWNORMAL);
 end;
 
+function TfmIndex.litArquivoVideo(const item: string): string;
+begin
+  Result := lerParam(item, 'arquivo_video', '', arq_liturgia);
+  if (Result <> '') and (not FileExists(Result)) then Result := '';
+end;
+
 procedure TfmIndex.litBtArquivoClick(Sender: TObject);
 var
-  item, videoId, arquivo: string;
+  item, arquivo: string;
 begin
   item := TControl(Sender).Parent.Name;
-  videoId := ytVideoIdDeUrl(lerParam(item, 'url', '', arq_liturgia));
-  if videoId = '' then Exit;
 
-  arquivo := ytCacheArquivo(videoId);
+  arquivo := litArquivoVideo(item);
   if arquivo = '' then
   begin
-    Application.MessageBox(PChar(fIniciando.Translate(
-      'Este vídeo ainda não foi baixado. Marque "Fixar canal" ao editar o item para guardar os últimos vídeos do canal.')),
-      TITULO, mb_ok + MB_ICONINFORMATION);
-    Exit;
+    arquivo := openDialog('arquivo',
+      'Arquivos de Vídeo (*.mp4;*.avi;*.wmv;*.mkv)|*.mp4;*.avi;*.wmv;*.mkv|' +
+      'Todos os Arquivos (*.*)|*.*', 'LiturgiaVideo');
+    if Trim(arquivo) = '' then Exit;
+    gravaParam(item, 'arquivo_video', arquivo, arq_liturgia);
+    ajustaBotoesYtItem(item);
   end;
 
   //Mesma tela do vídeo online: monitor e tela cheia de "Vídeos Online"
@@ -8495,10 +8451,10 @@ begin
     //player quando a URL tinha 'v=', deixando o link curto de fora
     subitem := ytVideoIdDeUrl(lerParam(item, 'url', '', arq_liturgia));
 
-    //Sem internet o vídeo baixado do canal fixado entra no lugar do player
-    //online, na mesma tela cheia do monitor de vídeos online
+    //Sem internet o arquivo local escolhido entra no lugar do player online,
+    //na mesma tela cheia do monitor de vídeos online
     txt := '';
-    if (subitem <> '') and (not temInternet) then txt := ytCacheArquivo(subitem);
+    if not temInternet then txt := litArquivoVideo(item);
 
     if (txt <> '') then
       player(txt, True, True)
@@ -9901,8 +9857,6 @@ end;
 procedure TfmIndex.buscaMusicas;
 var
   valor: string;
-  i: Integer;
-  tabela: string;
   letra: string;
   opc_colet: string;
 begin
@@ -10716,7 +10670,8 @@ var
   erro: boolean;
 begin
   mus := false;
-  erro := False;
+  bass_musica := 0;
+  bass_channel := 0;
 
   Memo1.Lines.clear();
   Memo1.Lines.Add('****INICIANDO****');
@@ -15913,6 +15868,8 @@ var
   bass_channel: HCHANNEL;
 begin
 //url := url+'.zip';
+  bass_musica := 0;
+  bass_channel := 0;
   ZipFile := TZipFile.Create;
   imgList := TStringList.Create;
 
@@ -16117,7 +16074,7 @@ begin
       cds.Post;
     end;
   end;
-  i := i+1;
+  i := linhas.Count;
   while i <= qt_lin do
   begin
     cds.Locate('ORDEM', i, []);

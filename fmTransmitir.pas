@@ -207,7 +207,7 @@ implementation
 
 uses
   fmMusica, fmMenu, fmQRCode, dmComponentes, fmMonitorSorteio, fmVideoOn, Vcl.MPlayer,
-  System.SyncObjs, System.StrUtils, System.IOUtils, IdURI, IdGlobal;
+  System.SyncObjs, System.StrUtils, System.IOUtils, System.Types, IdURI, IdGlobal;
 
 // ── Enumeração de interfaces de rede (iphlpapi) ─────────────────────────────
 

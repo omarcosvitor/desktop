@@ -71,7 +71,7 @@ implementation
 
 {$R *.dfm}
 
-uses fmMenu, dmComponentes, fmMonitorMenuMusicas, Data.DB;
+uses fmMenu, dmComponentes, fmMonitorMenuMusicas, Data.DB, FireDAC.Stan.Param;
 
 procedure TfListaMusica.bsSkinSpeedButton6Click(Sender: TObject);
 begin

@@ -192,6 +192,7 @@ type
     bass_musica: HSAMPLE;
     bass_channel: HCHANNEL;
 
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }
@@ -443,8 +444,6 @@ end;
 procedure TfEditorSlides.brImportarClick(Sender: TObject);
 var
   arquivo: string;
-  fileStream: TFileStream;
-  utf8Stream: TStringStream;
 begin
   try
     fmIndex.Visible := False;
@@ -1697,7 +1696,7 @@ begin
     end;
 //    Edit3.Text := IntToStr(pos)+' / '+IntToStr(len);//+' / '+FormatDateTime('dd/mm/yyyy HH:MM:SS.ZZZ', now());
 
-    if (next_time > 0) and (posT >= next_time) then
+    if (next_time > 0) and (Int64(posT) >= next_time) then
     begin
       gSlide.MinValue := next_time;
 //      tmrTempo.Enabled := False;

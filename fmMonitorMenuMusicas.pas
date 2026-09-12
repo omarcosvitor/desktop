@@ -27,6 +27,7 @@ type
     procedure FormKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
   private
     { Private declarations }
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }

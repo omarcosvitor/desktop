@@ -87,6 +87,7 @@ type
     uPosicao: Integer;
     imgPosicao: Integer;
 
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }
@@ -113,7 +114,7 @@ implementation
 {$R *.dfm}
 
 uses fmMenu, fmMusicaOperador, fmAtualiza, dmComponentes, fmIniciando,
-  fmTransmitir, fmMusicaRetorno;
+  fmTransmitir, fmMusicaRetorno, FireDAC.Stan.Param;
 
 { TfMusica }
 
@@ -1550,7 +1551,7 @@ begin
     end;
     Edit3.Text := IntToStr(pos)+' / '+IntToStr(len);//+' / '+FormatDateTime('dd/mm/yyyy HH:MM:SS.ZZZ', now());
 
-    if (next_time > 0) and (pos >= next_time) then
+    if (next_time > 0) and (Int64(pos) >= next_time) then
     begin
       fMusicaOperador.gSlide.MinValue := next_time;
       tmrTempo.Enabled := False;

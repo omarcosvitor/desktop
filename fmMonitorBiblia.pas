@@ -68,6 +68,7 @@ type
       const rTexto, rInfo: TRect);
     procedure desenhaCamada(alvo: TBitmap; const Texto, Info: string;
       dy: Integer; alfa: Byte);
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }

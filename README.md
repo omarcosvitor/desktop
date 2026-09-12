@@ -57,45 +57,22 @@ Instação opcional. Serve para deixar o código com uma aparência mais organiz
 3. O pacote será exibido em seu Project Manager (normalmente a porção direita da tela) sob o nome `PngComponentsDesign290.bpl`. Clique com o botão direito nesse projeto e clique em "Install".
 4. Após instalado, pode fechar o projeto.
 
-## Ferramentas externas (pasta `tools`)
+## Vídeo do YouTube na liturgia
 
-A pasta `tools` acompanha o repositório e precisa ser copiada para o diretório do
-executável do LouvorJA. Ela guarda os programas usados para baixar os vídeos dos
-canais fixados na liturgia — a reserva usada quando não há internet no culto.
+O player do programa é um iframe: sem internet ele não abre. Para ter o vídeo
+disponível no culto, baixe o arquivo por fora e aponte o item para ele.
 
-- `yt-dlp.exe` — já versionado aqui. É o que baixa o vídeo: o feed RSS do YouTube
-  não expõe o arquivo de mídia e o player do programa é um iframe. Sem ele o
-  programa continua funcionando normalmente, apenas sem a reserva local.
-  Atualize-o de tempos em tempos por
-  [yt-dlp.exe](https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe);
-  o YouTube muda com frequência e versões antigas param de baixar.
-- `ffmpeg.exe` — **não** vem no repositório: o executável passa de 90 MB e o
-  GitHub recusa arquivos acima de 100 MB. Baixe um build para Windows (por
-  exemplo o de [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds/releases))
-  e coloque o `ffmpeg.exe` na mesma pasta `tools`. Com ele o download alcança
-  1080p ou mais, porque o yt-dlp junta as faixas de vídeo e áudio separadas;
-  sem ele só existe formato progressivo, limitado a 720p pelo YouTube.
+1. No card do item da liturgia, clique no botão com a seta e escolha o arquivo
+   de vídeo no computador. A seta fica verde quando o arquivo está definido;
+   ao lado dele, o botão do YouTube abre a página do vídeo.
+2. Sem internet, ao executar o item, o arquivo escolhido é reproduzido no mesmo
+   monitor e em tela cheia, igual ao vídeo online.
 
-O programa também aceita os dois executáveis soltos no diretório do LouvorJA ou
-no `PATH` do Windows.
-
-Em ambos os casos a preferência é H.264 com áudio AAC: o player interno usa MCI,
-que depende dos codecs instalados no Windows e normalmente não abre VP9 nem AV1.
-
-### Como a reserva funciona
-
-1. Na tela de item da liturgia, ao buscar um canal do YouTube, marque **Fixar canal**.
-2. Os 5 vídeos mais recentes do canal, publicados nos últimos 7 dias, são baixados
-   em segundo plano para `<config>\youtube\<id do canal>`.
-3. O que sai dessa janela é apagado do disco, mesmo sem internet.
-4. No card do item, o botão com a seta fica verde quando o vídeo está no
-   computador; ao lado dele, o botão do YouTube abre a página do vídeo.
-5. Na hora de executar o item sem internet, o arquivo baixado é reproduzido no
-   mesmo monitor e em tela cheia, igual ao vídeo online.
+O player interno usa MCI, que depende dos codecs instalados no Windows e
+normalmente não abre VP9 nem AV1: prefira MP4 com H.264 e áudio AAC.
 
 Baixar vídeos do YouTube contraria os Termos de Serviço da plataforma, salvo
-conteúdo próprio ou de licença livre. A escolha dos canais fixados é de quem usa
-o programa.
+conteúdo próprio ou de licença livre. A escolha é de quem usa o programa.
 
 ## Execução do Programa
 

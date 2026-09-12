@@ -134,16 +134,13 @@ end;
 procedure TfBuscaMusica.txtBuscaChange(Sender: TObject);
 var
   valor: string;
-  nr: integer;
-  c: integer;
 begin
   dbGrid1.Columns[2].Width := dbGrid1.Width - dbGrid1.Columns[0].Width - dbGrid1.Columns[1].Width;
   valor := trim(txtBusca.Text);
   stBusca_0.caption := '';
   if trim(valor) <> '' then
   begin
-    val(txtBusca.Text, nr, c);
-    if c = 0 then
+    if StrToIntDef(valor, 0) > 0 then
     begin
       stBusca_0.caption := 'Buscando hino nº: ' + valor;
     end

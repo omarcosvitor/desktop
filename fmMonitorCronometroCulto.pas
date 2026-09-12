@@ -19,6 +19,7 @@ type
     procedure FormResize(Sender: TObject);
   private
     { Private declarations }
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }

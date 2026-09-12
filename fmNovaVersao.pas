@@ -35,7 +35,6 @@ type
     procedure FormActivate(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
   private
-    setup_dir: string;
   public
     { Public declarations }
 
@@ -59,9 +58,7 @@ end;
 
 procedure TfNovaVersao.bsSkinButton3Click(Sender: TObject);
 var
-  lista: TStringList;
   Flags: Cardinal;
-  inst: string;
 begin
 
   if not (InternetGetConnectedState(@Flags, 0)) then

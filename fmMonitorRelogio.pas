@@ -16,6 +16,7 @@ type
     procedure FormActivate(Sender: TObject);
   private
     { Private declarations }
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }

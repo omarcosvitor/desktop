@@ -63,7 +63,6 @@ type
     pedido_feito: Boolean;
     encerrando: Boolean;
 
-    procedure CreateParams(var Params: TCreateParams); override;
     procedure tmrCriaBrowserTimer(Sender: TObject);
     procedure wvVideoAfterCreated(Sender: TObject);
     procedure wvVideoNavigationCompleted(Sender: TObject;
@@ -82,6 +81,7 @@ type
     procedure ajustaTamanho;
     procedure mostraErro(const msg: string);
   protected
+    procedure CreateParams(var Params: TCreateParams); override;
     //Sem isso o conteúdo desalinha ao mover a janela entre monitores
     procedure WMMove(var aMessage: TWMMove); message WM_MOVE;
   public

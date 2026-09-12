@@ -49,6 +49,7 @@ type
     procedure FormMouseWheelUp(Sender: TObject; Shift: TShiftState; MousePos: TPoint; var Handled: Boolean);
   private
     { Private declarations }
+  protected
     procedure CreateParams(var Params: TCreateParams); override;
   public
     { Public declarations }
