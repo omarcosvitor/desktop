@@ -2,6 +2,8 @@
 *.exe
 !components/MonitorInfoView/*.exe
 !components/CnWizards/*.exe
+# Ferramentas externas distribuidas junto do programa (pasta "tools")
+!tools/*.exe
 *.dll
 *.bpl
 *.bpi

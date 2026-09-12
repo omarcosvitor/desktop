@@ -15,7 +15,10 @@ object fMonitorBiblia: TfMonitorBiblia
   OldCreateOrder = False
   OnActivate = FormActivate
   OnClose = FormClose
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
   OnKeyUp = FormKeyUp
+  OnResize = FormResize
   PixelsPerInch = 96
   TextHeight = 13
   object pnlBiblia: TPanel

@@ -47,7 +47,7 @@ implementation
 
 {$R *.dfm}
 
-uses fmMenu, fmAtualiza, dmComponentes, fmTransmitir;
+uses fmMenu, fmAtualiza, dmComponentes, fmTransmitir, uInicioWindows;
 
 procedure TfIniciando.AppCreateForm(InstanceClass: TComponentClass;
   var Reference);
@@ -399,8 +399,26 @@ begin
 
 
     //**MOSTRA FORM*************************************************************
-    fmIndex.Show;
-    fmIndex.fadeJanela(fmIndex, 255);
+    //Depende dos diretórios de dados, já definidos neste ponto
+    fmIndex.iniciaBandejaEOpcoes;
+
+    if IniciouMinimizado then
+    begin
+      //Aberto pelo Windows: a janela precisa existir para a inicialização
+      //seguir igual à de sempre, mas não pode aparecer. Sobe transparente e
+      //vai direto para a área de notificação
+      fmIndex.AlphaBlend := True;
+      fmIndex.AlphaBlendValue := 0;
+      fmIndex.Show;
+      fmIndex.escondeNaBandeja;
+      fmIndex.AlphaBlend := False;
+      fmIndex.AlphaBlendValue := 255;
+    end
+    else
+    begin
+      fmIndex.Show;
+      fmIndex.fadeJanela(fmIndex, 255);
+    end;
 
     //**CHECA VERSÃO E NOVAS VERSÕES********************************************
     fmIndex.gravaParam('Config','VersaoExe',fmIndex.VersaoExe);
