@@ -2234,7 +2234,6 @@ type
     cbBibliaTransicaoVel: TbsSkinComboBox;
 
     //Fundo musical do apelo
-    pgFundoMus: TbsRibbonPage;
     btFundoMusTocar: TbsSkinSpeedButton;
     lblFundoMus: TbsSkinStdLabel;
     ckFundoMusRepetir: TbsSkinCheckBox;
@@ -2296,7 +2295,7 @@ type
     procedure criaOpcoesBiblia;
     procedure cbBibliaTransicaoChange(Sender: TObject);
 
-    procedure criaAbaFundoMusical;
+    procedure criaFundoMusical;
     procedure fundoMusAtualiza;
     procedure fundoMusAlterna(Sender: TObject);
     procedure fundoMusEscolheHino(Sender: TObject);
@@ -5028,7 +5027,7 @@ procedure TfmIndex.iniciaBandejaEOpcoes;
 begin
   criaOpcoesInicio;
   criaOpcoesBiblia;
-  criaAbaFundoMusical;
+  criaFundoMusical;
   criaBandeja;
 
   //Reserva dos canais fixados: baixa o que falta e apaga o que passou da
@@ -5260,11 +5259,11 @@ begin
     Application.MessageBox(PChar(fIniciando.Translate(
       'Escolha antes o hino ou o arquivo do fundo musical.')),
       TITULO, mb_ok + MB_ICONINFORMATION);
-    bsRibbon1.ActivePage := pgFundoMus;
+    bsRibbon1.ActivePage := bsUtilitarios;
     Exit;
   end;
 
-  if not fmusToca(arq, fundoMusVolume,
+  if not fmusToca(arq, dir_temp, fundoMusVolume,
                   lerParam('Fundo Musical', 'Repetir', '1') = '1', erro) then
   begin
     Application.MessageBox(PChar(fIniciando.Translate(
@@ -5352,12 +5351,11 @@ begin
   fmusDefineVolume(vol);
 end;
 
-procedure TfmIndex.criaAbaFundoMusical;
+procedure TfmIndex.criaFundoMusical;
 var
-  tab: TbsRibbonTab;
   grupo, grupoOpc: TbsRibbonGroup;
   lbl: TbsSkinStdLabel;
-  idxAntes, i, vol: Integer;
+  i, vol: Integer;
 
   function criaBotao(pai: TWinControl; esq, topo, larg, alt: Integer;
     const Texto: string; Imagens: TCustomImageList; Indice: Integer;
@@ -5381,23 +5379,10 @@ var
   end;
 
 begin
-  if Assigned(pgFundoMus) then Exit;
-
-  //Acrescentar aba muda a aba ativa do ribbon: guarda para devolver no fim
-  idxAntes := bsRibbon1.TabIndex;
-
-  pgFundoMus := TbsRibbonPage.Create(Self);
-  pgFundoMus.Parent := bsRibbon1;
-  pgFundoMus.Ribbon := bsRibbon1;
-  pgFundoMus.Name := 'bsFundoMusical';
-  pgFundoMus.Caption := fIniciando.Translate('Fundo Musical');
-  //Todas as páginas ocupam o mesmo retângulo, e o cálculo dele é privado do
-  //componente: copia o de uma página que já existe
-  pgFundoMus.BoundsRect := bsLiturgia.BoundsRect;
-  pgFundoMus.Visible := False;
+  if Assigned(btFundoMusTocar) then Exit;
 
   grupo := TbsRibbonGroup.Create(Self);
-  grupo.Parent := pgFundoMus;
+  grupo.Parent := bsUtilitarios;
   grupo.SkinData := DM.bsSkinData1;
   grupo.SkinDataName := 'officegroup';
   grupo.Caption := fIniciando.Translate('Fundo musical');
@@ -5423,7 +5408,7 @@ begin
   lblFundoMus.SetBounds(104, 52, 226, 18);
 
   grupoOpc := TbsRibbonGroup.Create(Self);
-  grupoOpc.Parent := pgFundoMus;
+  grupoOpc.Parent := bsUtilitarios;
   grupoOpc.SkinData := DM.bsSkinData1;
   grupoOpc.SkinDataName := 'officegroup';
   grupoOpc.Caption := fIniciando.Translate('Opções');
@@ -5457,10 +5442,6 @@ begin
     cbFundoMusVolume.Items.Add(IntToStr(i * 10) + '%');
   cbFundoMusVolume.OnChange := fundoMusOpcaoMudou;
 
-  tab := bsRibbon1.Tabs.Add;
-  tab.Page := pgFundoMus;
-  tab.Visible := True;
-
   //Botão de acesso rápido no alto da janela: toca e para sem sair da aba em
   //que o culto está sendo operado
   bsRibbon1.ButtonsShowHint := True;
@@ -5485,7 +5466,6 @@ begin
   cbFundoMusVolume.ItemIndex := EnsureRange((vol div 10) - 1, 0, 9);
   cbFundoMusVolume.OnChange := fundoMusOpcaoMudou;
 
-  bsRibbon1.TabIndex := idxAntes;
   fundoMusAtualiza;
 end;
 

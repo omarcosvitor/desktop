@@ -30,9 +30,10 @@ const
   //Intervalo esperado das chamadas de fmusPulso, em milissegundos
   FMUS_PULSO_MS = 200;
 
-//Começa a tocar; Erro traz a mensagem quando devolve False
-function fmusToca(const Arquivo: string; Volume: Integer; Repetir: Boolean;
-  out Erro: string): Boolean;
+//Começa a tocar; Erro traz a mensagem quando devolve False. DirTemp é onde
+//cabe gravar a cópia de que alguns arquivos precisam - veja arquivoParaMci
+function fmusToca(const Arquivo, DirTemp: string; Volume: Integer;
+  Repetir: Boolean; out Erro: string): Boolean;
 //Pede o fim com esmaecimento - quem encerra de fato é fmusPulso
 procedure fmusPara;
 //Encerra na hora, sem esmaecer (fechamento do programa)
@@ -59,6 +60,7 @@ var
   FSaindo: Boolean = False;
   FVolumeAlvo: Integer = FMUS_VOL_PADRAO;
   FVolumeAtual: Integer = 0;
+  FTemp: string = '';
 
 function comando(const Cmd: string; Resposta: PChar = nil;
   Tam: Integer = 0): Boolean;
@@ -84,20 +86,85 @@ begin
   comando('setaudio ' + ALIAS_MCI + ' volume to ' + IntToStr(FVolumeAtual * 10));
 end;
 
+procedure apagaTemp;
+begin
+  if FTemp = '' then Exit;
+  //Winapi.Windows também exporta DeleteFile, com outra assinatura
+  System.SysUtils.DeleteFile(FTemp);
+  FTemp := '';
+end;
+
+{
+  Parte dos arquivos da coleção traz dois tags ID3v2 emendados no começo. O
+  driver do MCI pula só o primeiro, não acha o sync do MPEG onde esperava e
+  devolve o erro 277, "A problem occurred in initializing MCI". Copiar só o
+  áudio para um temporário resolve sem mexer no arquivo original.
+}
+function arquivoParaMci(const Arquivo, DirTemp: string): string;
+var
+  origem, destino: TFileStream;
+  cab: array[0..9] of Byte;
+  tags, tam: Integer;
+  inicio: Int64;
+begin
+  Result := Arquivo;
+  if DirTemp = '' then Exit;
+
+  try
+    origem := TFileStream.Create(Arquivo, fmOpenRead or fmShareDenyWrite);
+    try
+      tags := 0;
+      inicio := 0;
+      while origem.Read(cab, SizeOf(cab)) = SizeOf(cab) do
+      begin
+        if (cab[0] <> Ord('I')) or (cab[1] <> Ord('D')) or
+           (cab[2] <> Ord('3')) then Break;
+        //O tamanho do tag vem em sete bits por byte
+        tam := (cab[6] shl 21) or (cab[7] shl 14) or (cab[8] shl 7) or cab[9];
+        Inc(tags);
+        inicio := origem.Position + tam;
+        origem.Position := inicio;
+      end;
+      if (tags < 2) or (inicio >= origem.Size) then Exit;
+
+      apagaTemp;
+      FTemp := DirTemp + '~fundo' + ExtractFileExt(Arquivo);
+      destino := TFileStream.Create(FTemp, fmCreate);
+      try
+        origem.Position := inicio;
+        destino.CopyFrom(origem, origem.Size - inicio);
+      finally
+        destino.Free;
+      end;
+      Result := FTemp;
+    finally
+      origem.Free;
+    end;
+  except
+    //Sem a cópia sobra o arquivo original, que o MCI recusa com a mensagem dele
+    FTemp := '';
+    Result := Arquivo;
+  end;
+end;
+
 procedure fecha;
 begin
   FSaindo := False;
-  if not FAberto then Exit;
-  comando('stop ' + ALIAS_MCI);
-  comando('close ' + ALIAS_MCI);
-  FAberto := False;
-  FVolumeAtual := 0;
+  if FAberto then
+  begin
+    comando('stop ' + ALIAS_MCI);
+    comando('close ' + ALIAS_MCI);
+    FAberto := False;
+    FVolumeAtual := 0;
+  end;
+  apagaTemp;
 end;
 
-function fmusToca(const Arquivo: string; Volume: Integer; Repetir: Boolean;
-  out Erro: string): Boolean;
+function fmusToca(const Arquivo, DirTemp: string; Volume: Integer;
+  Repetir: Boolean; out Erro: string): Boolean;
 var
   cod: MCIERROR;
+  arq: string;
   buf: array[0..255] of Char;
 begin
   Result := False;
@@ -115,13 +182,14 @@ begin
   end;
 
   fecha;
+  arq := arquivoParaMci(Arquivo, DirTemp);
 
   //mpegvideo cobre mp3, wav e wma; sem informar o tipo o MCI decide pela
   //extensão, o que falha em parte dos arquivos
-  cod := mciSendString(PChar('open "' + Arquivo + '" type mpegvideo alias ' +
+  cod := mciSendString(PChar('open "' + arq + '" type mpegvideo alias ' +
                              ALIAS_MCI), nil, 0, 0);
   if cod <> 0 then
-    cod := mciSendString(PChar('open "' + Arquivo + '" alias ' + ALIAS_MCI),
+    cod := mciSendString(PChar('open "' + arq + '" alias ' + ALIAS_MCI),
                          nil, 0, 0);
 
   if cod <> 0 then
@@ -130,6 +198,7 @@ begin
     mciGetErrorString(cod, @buf[0], Length(buf));
     Erro := Trim(string(buf));
     if Erro = '' then Erro := 'Não foi possível abrir o arquivo de áudio.';
+    apagaTemp;
     Exit;
   end;
 
