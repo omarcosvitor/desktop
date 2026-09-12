@@ -2234,11 +2234,18 @@ type
     cbBibliaTransicaoVel: TbsSkinComboBox;
 
     //Fundo musical do apelo
-    btFundoMusTocar: TbsSkinSpeedButton;
+    btFundoMus: TbsSkinSpeedButton;
     grpFundoMus: TbsRibbonGroup;
+    tsFundoMus: TbsSkinTabSheet;
+    lblFundoMusFaixa: TbsSkinStdLabel;
+    btFundoMusTocar: TbsSkinSpeedButton;
     ckFundoMusRepetir: TbsSkinCheckBox;
     cbFundoMusVolume: TbsSkinComboBox;
     tmrFundoMus: TTimer;
+    txtFundoMusBusca: TbsSkinEdit;
+    gridFundoMus: TbsSkinDBGrid;
+    lblFundoMusStatus: TbsSkinStdLabel;
+    qrFundoMus: TFDQuery;
 
     const
       VERSAO_MIN_BD: integer = 140;
@@ -2293,10 +2300,13 @@ type
     procedure cbBibliaTransicaoChange(Sender: TObject);
 
     procedure criaFundoMusical;
+    procedure abreFundoMusical(Sender: TObject);
     procedure fundoMusAtualiza;
     procedure fundoMusAlterna(Sender: TObject);
     procedure fundoMusEscolheHino(Sender: TObject);
     procedure fundoMusEscolheArquivo(Sender: TObject);
+    procedure fundoMusBuscaMudou(Sender: TObject);
+    procedure fundoMusBuscaTecla(Sender: TObject; var Key: Char);
     procedure fundoMusOpcaoMudou(Sender: TObject);
     procedure tmrFundoMusTimer(Sender: TObject);
     function fundoMusArquivo: string;
@@ -5131,9 +5141,10 @@ const
   //Ícones de DM.ico_40x40 usados no botão grande da aba
   ICO_FUNDO_TOCAR = 20;   //triângulo azul
   ICO_FUNDO_PARAR = 21;   //quadrado vermelho
-  //Ícones de DM.ico_24x24 usados nos botões menores
-  ICO_FUNDO_HINO  = 60;
+  //Ícone de DM.ico_24x24 usado no botão de arquivo
   ICO_FUNDO_ARQ   = 3;
+  //Ícone de DM.ico_16x16 usado na aba
+  ICO_FUNDO_ABA   = 19;
 
 function TfmIndex.fundoMusDescricao: string;
 begin
@@ -5188,10 +5199,17 @@ var
   tocando: Boolean;
   desc: string;
 begin
-  if not Assigned(btFundoMusTocar) then Exit;
+  if not Assigned(btFundoMus) then Exit;
 
   tocando := fmusTocando;
   desc := fundoMusDescricao;
+
+  if tocando
+    then btFundoMus.ImageIndex := ICO_FUNDO_PARAR
+    else btFundoMus.ImageIndex := ICO_FUNDO_TOCAR;
+  btFundoMus.Repaint;
+
+  if not Assigned(btFundoMusTocar) then Exit;
 
   if tocando then
   begin
@@ -5206,9 +5224,9 @@ begin
   btFundoMusTocar.Repaint;
 
   if desc = ''
-    then grpFundoMus.Caption := fIniciando.Translate('Fundo musical')
-    else grpFundoMus.Caption := fIniciando.Translate('Fundo musical') +
-                                ' - ' + desc;
+    then lblFundoMusFaixa.Caption :=
+           fIniciando.Translate('Nenhum hino ou arquivo escolhido')
+    else lblFundoMusFaixa.Caption := desc;
 end;
 
 procedure TfmIndex.fundoMusAlterna(Sender: TObject);
@@ -5228,23 +5246,21 @@ begin
   arq := fundoMusArquivo;
   if Trim(arq) = '' then
   begin
-    Application.MessageBox(PChar(fIniciando.Translate(
-      'Escolha antes o hino ou o arquivo do fundo musical.')),
-      TITULO, mb_ok + MB_ICONINFORMATION);
-    bsRibbon1.ActivePage := bsUtilitarios;
+    lblFundoMusStatus.Caption := fIniciando.Translate(
+      'Escolha antes o hino na lista abaixo ou um arquivo do computador.');
     Exit;
   end;
 
   if not fmusToca(arq, dir_temp, fundoMusVolume,
                   lerParam('Fundo Musical', 'Repetir', '1') = '1', erro) then
   begin
-    Application.MessageBox(PChar(fIniciando.Translate(
-      'Não foi possível tocar o fundo musical') + '.' + #13#10 + erro),
-      TITULO, mb_ok + mb_iconerror);
+    lblFundoMusStatus.Caption := fIniciando.Translate(
+      'Não foi possível tocar o fundo musical') + ': ' + erro;
     fundoMusAtualiza;
     Exit;
   end;
 
+  lblFundoMusStatus.Caption := '';
   tmrFundoMus.Enabled := True;
   fundoMusAtualiza;
 end;
@@ -5263,33 +5279,43 @@ procedure TfmIndex.fundoMusEscolheHino(Sender: TObject);
 var
   arq: string;
 begin
-  fIniciando.AppCreateForm(TfBuscaMusica, fBuscaMusica);
-  fBuscaMusica.ShowModal;
-  if fBuscaMusica.id <= 0 then Exit;
+  if (not qrFundoMus.Active) or qrFundoMus.IsEmpty then Exit;
 
   gravaParam('Fundo Musical', 'Tipo', 'musica');
-  gravaParam('Fundo Musical', 'Musica', IntToStr(fBuscaMusica.id));
-
-  DM.qrMUSICA.Close;
-  DM.qrMUSICA.ParamByName('ID').Value := fBuscaMusica.id;
-  DM.qrMUSICA.Open;
-  try
-    if not DM.qrMUSICA.IsEmpty then
-      gravaParam('Fundo Musical', 'Descricao',
-                 DM.qrMUSICA.FieldByName('NOME').AsString);
-  finally
-    DM.qrMUSICA.Close;
-  end;
+  gravaParam('Fundo Musical', 'Musica',
+             qrFundoMus.FieldByName('ID').AsString);
+  gravaParam('Fundo Musical', 'Descricao',
+             qrFundoMus.FieldByName('NOME').AsString);
 
   //Aviso agora, e não no meio do apelo: o áudio do hino pode ainda não ter
   //sido baixado
   arq := fundoMusArquivo;
   if (Trim(arq) = '') or (not FileExists(arq)) then
-    Application.MessageBox(PChar(fIniciando.Translate(
-      'O áudio deste hino não está no computador. Abra o hino uma vez pelo programa para baixá-lo.')),
-      TITULO, mb_ok + MB_ICONEXCLAMATION);
+    lblFundoMusStatus.Caption := fIniciando.Translate(
+      'O áudio deste hino não está no computador. Abra o hino uma vez pelo programa para baixá-lo.')
+  else
+    lblFundoMusStatus.Caption := '';
 
   fundoMusAtualiza;
+end;
+
+procedure TfmIndex.fundoMusBuscaMudou(Sender: TObject);
+begin
+  qrFundoMus.Close;
+  qrFundoMus.ParamByName('VALOR').AsString :=
+    termo_busca(Trim(txtFundoMusBusca.Text));
+  qrFundoMus.Open;
+
+  corCampoBusca(qrFundoMus, txtFundoMusBusca, gridFundoMus);
+  lblFundoMusStatus.Caption := qtItens(qrFundoMus, 'hino encontrado',
+    'hinos encontrados', 'Nenhum hino encontrado');
+end;
+
+procedure TfmIndex.fundoMusBuscaTecla(Sender: TObject; var Key: Char);
+begin
+  if Key <> #13 then Exit;
+  Key := #0;
+  fundoMusEscolheHino(Sender);
 end;
 
 procedure TfmIndex.fundoMusEscolheArquivo(Sender: TObject);
@@ -5304,6 +5330,7 @@ begin
   gravaParam('Fundo Musical', 'Tipo', 'arquivo');
   gravaParam('Fundo Musical', 'Arquivo', arq);
   gravaParam('Fundo Musical', 'Descricao', ExtractFileName(arq));
+  lblFundoMusStatus.Caption := '';
   fundoMusAtualiza;
 end;
 
@@ -5325,15 +5352,17 @@ end;
 
 procedure TfmIndex.criaFundoMusical;
 var
-  lbl: TbsSkinStdLabel;
+  pnlTopo, pnlBusca: TbsSkinPanel;
+  sbGrade: TbsSkinScrollBar;
+  dsGrade: TDataSource;
   i, vol: Integer;
 
-  function criaBotao(pai: TWinControl; esq, topo, larg, alt: Integer;
+  function criaBotao(Dono: TWinControl; esq, topo, larg, alt: Integer;
     const Texto: string; Imagens: TCustomImageList; Indice: Integer;
     Evento: TNotifyEvent; Grande: Boolean): TbsSkinSpeedButton;
   begin
     Result := TbsSkinSpeedButton.Create(Self);
-    Result.Parent := pai;
+    Result.Parent := Dono;
     Result.SkinData := DM.bsSkinData1;
     Result.SkinDataName := 'resizetoolbutton';
     Result.ImageList := Imagens;
@@ -5353,70 +5382,180 @@ var
     Result.OnClick := Evento;
   end;
 
+  function criaLabel(Dono: TWinControl; esq, topo, larg, alt: Integer;
+    const Texto: string): TbsSkinStdLabel;
+  begin
+    Result := TbsSkinStdLabel.Create(Self);
+    Result.Parent := Dono;
+    Result.SkinData := DM.bsSkinData1;
+    Result.SkinDataName := 'stdlabel';
+    Result.AutoSize := False;
+    Result.Layout := tlCenter;
+    Result.Caption := Texto;
+    Result.SetBounds(esq, topo, larg, alt);
+  end;
+
+  function criaPainel(alt: Integer): TbsSkinPanel;
+  begin
+    Result := TbsSkinPanel.Create(Self);
+    Result.Parent := tsFundoMus;
+    Result.SkinData := DM.bsSkinData1;
+    Result.SkinDataName := 'panel';
+    Result.Height := alt;
+    Result.Align := alTop;
+  end;
+
+  procedure criaColuna(const Campo, Titulo: string; larg: Integer);
+  begin
+    with gridFundoMus.Columns.Add do
+    begin
+      FieldName := Campo;
+      Title.Caption := fIniciando.Translate(Titulo);
+      Width := larg;
+    end;
+  end;
+
 begin
-  if Assigned(btFundoMusTocar) then Exit;
+  if Assigned(btFundoMus) then Exit;
 
   grpFundoMus := TbsRibbonGroup.Create(Self);
   grpFundoMus.Parent := bsUtilitarios;
   grpFundoMus.SkinData := DM.bsSkinData1;
   grpFundoMus.SkinDataName := 'officegroup';
-  grpFundoMus.Width := 560;
+  grpFundoMus.Caption := fIniciando.Translate('Apelo');
+  grpFundoMus.Width := 120;
   grpFundoMus.Left := bsUtilitarios.Width;
   grpFundoMus.Align := alLeft;
 
-  btFundoMusTocar := criaBotao(grpFundoMus, 2, 2, 96, 65,
-    fIniciando.Translate('Tocar'), DM.ico_40x40, ICO_FUNDO_TOCAR,
-    fundoMusAlterna, True);
-
-  criaBotao(grpFundoMus, 100, 2, 230, 32,
-    fIniciando.Translate('Hino do programa...'), DM.ico_24x24,
-    ICO_FUNDO_HINO, fundoMusEscolheHino, False);
-  criaBotao(grpFundoMus, 100, 34, 230, 33,
-    fIniciando.Translate('Arquivo do computador...'), DM.ico_24x24,
-    ICO_FUNDO_ARQ, fundoMusEscolheArquivo, False);
-
-  ckFundoMusRepetir := TbsSkinCheckBox.Create(Self);
-  ckFundoMusRepetir.Parent := grpFundoMus;
-  ckFundoMusRepetir.SkinData := DM.bsSkinData1;
-  ckFundoMusRepetir.SkinDataName := 'checkbox';
-  ckFundoMusRepetir.Caption := fIniciando.Translate('Repetir sem parar');
-  ckFundoMusRepetir.SetBounds(340, 10, 210, 20);
-  ckFundoMusRepetir.OnClick := fundoMusOpcaoMudou;
-
-  lbl := TbsSkinStdLabel.Create(Self);
-  lbl.Parent := grpFundoMus;
-  lbl.SkinData := DM.bsSkinData1;
-  lbl.SkinDataName := 'stdlabel';
-  lbl.AutoSize := False;
-  lbl.Layout := tlCenter;
-  lbl.Caption := fIniciando.Translate('Volume:');
-  lbl.SetBounds(340, 38, 55, 20);
-
-  cbFundoMusVolume := TbsSkinComboBox.Create(Self);
-  cbFundoMusVolume.Parent := grpFundoMus;
-  cbFundoMusVolume.SkinData := DM.bsSkinData1;
-  cbFundoMusVolume.SkinDataName := 'combobox';
-  cbFundoMusVolume.Style := bscbFixedStyle;
-  cbFundoMusVolume.SetBounds(398, 38, 70, 20);
-  for i := 1 to 10 do
-    cbFundoMusVolume.Items.Add(IntToStr(i * 10) + '%');
-  cbFundoMusVolume.OnChange := fundoMusOpcaoMudou;
+  btFundoMus := TbsSkinSpeedButton.Create(Self);
+  btFundoMus.Parent := grpFundoMus;
+  btFundoMus.SkinData := DM.bsSkinData1;
+  btFundoMus.SkinDataName := 'resizetoolbutton';
+  btFundoMus.ImageList := DM.ico_40x40;
+  btFundoMus.ImageIndex := ICO_FUNDO_TOCAR;
+  btFundoMus.Caption := fIniciando.Translate('Fundo musical');
+  btFundoMus.ShowCaption := True;
+  btFundoMus.Transparent := True;
+  btFundoMus.Flat := True;
+  btFundoMus.Spacing := 1;
+  btFundoMus.Layout := bsUtils.blGlyphTop;
+  btFundoMus.Align := alClient;
+  btFundoMus.OnClick := abreFundoMusical;
 
   tmrFundoMus := TTimer.Create(Self);
   tmrFundoMus.Enabled := False;
   tmrFundoMus.Interval := FMUS_PULSO_MS;
   tmrFundoMus.OnTimer := tmrFundoMusTimer;
 
-  ckFundoMusRepetir.OnClick := nil;
-  ckFundoMusRepetir.Checked := (lerParam('Fundo Musical', 'Repetir', '1') = '1');
-  ckFundoMusRepetir.OnClick := fundoMusOpcaoMudou;
+  tsFundoMus := TbsSkinTabSheet.Create(Self);
+  tsFundoMus.Name := 'tsFundoMus';
+  tsFundoMus.PageControl := PageControl1;
+  tsFundoMus.Caption := fIniciando.Translate('Fundo musical');
+  tsFundoMus.ImageIndex := ICO_FUNDO_ABA;
+  tsFundoMus.TabVisible := False;
 
+  pnlTopo := criaPainel(96);
+
+  btFundoMusTocar := criaBotao(pnlTopo, 8, 6, 104, 84,
+    fIniciando.Translate('Tocar'), DM.ico_40x40, ICO_FUNDO_TOCAR,
+    fundoMusAlterna, True);
+
+  lblFundoMusFaixa := criaLabel(pnlTopo, 124, 8,
+    pnlTopo.ClientWidth - 136, 26, '');
+  lblFundoMusFaixa.Anchors := [akLeft, akTop, akRight];
+
+  ckFundoMusRepetir := TbsSkinCheckBox.Create(Self);
+  ckFundoMusRepetir.Parent := pnlTopo;
+  ckFundoMusRepetir.SkinData := DM.bsSkinData1;
+  ckFundoMusRepetir.SkinDataName := 'checkbox';
+  ckFundoMusRepetir.Caption := fIniciando.Translate('Repetir sem parar');
+  ckFundoMusRepetir.SetBounds(124, 46, 170, 24);
+
+  criaLabel(pnlTopo, 304, 46, 60, 24, fIniciando.Translate('Volume:'));
+
+  cbFundoMusVolume := TbsSkinComboBox.Create(Self);
+  cbFundoMusVolume.Parent := pnlTopo;
+  cbFundoMusVolume.SkinData := DM.bsSkinData1;
+  cbFundoMusVolume.SkinDataName := 'combobox';
+  cbFundoMusVolume.Style := bscbFixedStyle;
+  cbFundoMusVolume.SetBounds(366, 46, 80, 24);
+  for i := 1 to 10 do
+    cbFundoMusVolume.Items.Add(IntToStr(i * 10) + '%');
+
+  criaBotao(pnlTopo, 464, 42, 240, 32,
+    fIniciando.Translate('Arquivo do computador...'), DM.ico_24x24,
+    ICO_FUNDO_ARQ, fundoMusEscolheArquivo, False);
+
+  pnlBusca := criaPainel(34);
+  pnlBusca.Top := pnlTopo.Height;
+
+  criaLabel(pnlBusca, 8, 5, 84, 24, fIniciando.Translate('Buscar hino:'));
+
+  txtFundoMusBusca := TbsSkinEdit.Create(Self);
+  txtFundoMusBusca.Parent := pnlBusca;
+  txtFundoMusBusca.SkinData := DM.bsSkinData1;
+  txtFundoMusBusca.SkinDataName := 'edit';
+  txtFundoMusBusca.SetBounds(96, 6, 320, 22);
+
+  lblFundoMusStatus := criaLabel(tsFundoMus, 0, 0, 200, 22, '');
+  lblFundoMusStatus.Align := alBottom;
+
+  qrFundoMus := TFDQuery.Create(Self);
+  qrFundoMus.Connection := DM.ADO;
+  qrFundoMus.SQL.Add('SELECT DISTINCT M.ID, M.FAIXA, M.NOME, M.NOME_ALBUM_COM');
+  qrFundoMus.SQL.Add('FROM LISTA_MUSICAS M');
+  qrFundoMus.SQL.Add('WHERE (CAST(:VALOR AS INTEGER) > 0 AND TIPO_HASD = ''S''');
+  qrFundoMus.SQL.Add('       AND FAIXA = :VALOR)');
+  qrFundoMus.SQL.Add('   OR (CAST(:VALOR AS INTEGER) <= 0');
+  qrFundoMus.SQL.Add('       AND NOME_SEMAC LIKE ''%'' || :VALOR || ''%'')');
+
+  dsGrade := TDataSource.Create(Self);
+  dsGrade.DataSet := qrFundoMus;
+
+  sbGrade := TbsSkinScrollBar.Create(Self);
+  sbGrade.Parent := tsFundoMus;
+  sbGrade.SkinData := DM.bsSkinData1;
+  sbGrade.SkinDataName := 'vscrollbar';
+  sbGrade.Kind := sbVertical;
+  sbGrade.Width := 19;
+  sbGrade.Visible := False;
+  sbGrade.Align := alRight;
+
+  gridFundoMus := TbsSkinDBGrid.Create(Self);
+  gridFundoMus.Parent := tsFundoMus;
+  gridFundoMus.SkinData := DM.bsSkinData1;
+  gridFundoMus.SkinDataName := 'grid';
+  gridFundoMus.UseSkinFont := True;
+  gridFundoMus.UseSkinCellHeight := True;
+  gridFundoMus.DefaultCellHeight := 20;
+  gridFundoMus.VScrollBar := sbGrade;
+  gridFundoMus.DataSource := dsGrade;
+  gridFundoMus.Options := [dgTitles, dgRowLines, dgRowSelect, dgTabs];
+  gridFundoMus.Align := alClient;
+  gridFundoMus.OnDblClick := fundoMusEscolheHino;
+  criaColuna('FAIXA', 'Número', 70);
+  criaColuna('NOME', 'Hino', 420);
+  criaColuna('NOME_ALBUM_COM', 'Álbum', 320);
+
+  txtFundoMusBusca.OnChange := fundoMusBuscaMudou;
+  txtFundoMusBusca.OnKeyPress := fundoMusBuscaTecla;
+
+  ckFundoMusRepetir.Checked :=
+    (lerParam('Fundo Musical', 'Repetir', '1') = '1');
   vol := fundoMusVolume;
-  cbFundoMusVolume.OnChange := nil;
   cbFundoMusVolume.ItemIndex := EnsureRange((vol div 10) - 1, 0, 9);
+  ckFundoMusRepetir.OnClick := fundoMusOpcaoMudou;
   cbFundoMusVolume.OnChange := fundoMusOpcaoMudou;
 
   fundoMusAtualiza;
+end;
+
+procedure TfmIndex.abreFundoMusical(Sender: TObject);
+begin
+  fundoMusAtualiza;
+  abrePagina(tsFundoMus);
+  if not qrFundoMus.Active then fundoMusBuscaMudou(nil);
+  if txtFundoMusBusca.CanFocus then txtFundoMusBusca.SetFocus;
 end;
 
 procedure TfmIndex.ajustaBotoesYtItem(const item: string);

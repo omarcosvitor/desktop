@@ -25,6 +25,7 @@
 *.cfg
 *.hpp
 *Resource.rc
+*.err
 
 # Delphi local files (user-specific info)
 *.local
