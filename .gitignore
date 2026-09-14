@@ -44,3 +44,17 @@ __recovery/
 
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
+
+# Lixo de SO e editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+
+# Delphi designer/legacy artifacts
+*.ddp
+*.vlb
+*.dof
+*.otares
+*.bak
