@@ -14,10 +14,6 @@
 
 interface
 
-const
-  //Aceitos na linha de comando para subir direto na bandeja
-  PARAM_TRAY: array[0..2] of string = ('/tray', '-tray', '/minimizado');
-
 function IniciaComWindows: Boolean;
 //Devolve False quando o registro recusou a escrita (política de grupo, por
 //exemplo); quem chamou desfaz o estado do controle na tela
@@ -33,9 +29,12 @@ const
   CHAVE_RUN  = 'Software\Microsoft\Windows\CurrentVersion\Run';
   NOME_VALOR = 'LouvorJA';
 
+  //Aceito na linha de comando para subir direto na bandeja
+  PARAM_TRAY = '/tray';
+
 function comandoInicio: string;
 begin
-  Result := '"' + ParamStr(0) + '" ' + PARAM_TRAY[0];
+  Result := '"' + ParamStr(0) + '" ' + PARAM_TRAY;
 end;
 
 function IniciaComWindows: Boolean;
@@ -91,12 +90,11 @@ end;
 
 function IniciouMinimizado: Boolean;
 var
-  i, j: Integer;
+  i: Integer;
 begin
   Result := False;
   for i := 1 to ParamCount do
-    for j := Low(PARAM_TRAY) to High(PARAM_TRAY) do
-      if SameText(Trim(ParamStr(i)), PARAM_TRAY[j]) then Exit(True);
+    if SameText(Trim(ParamStr(i)), PARAM_TRAY) then Exit(True);
 end;
 
 end.

@@ -81,15 +81,6 @@ const
   //'youtu.be', sempre terminando o domínio - assim 'meu-youtube.com.br' não passa
   RE_HOST_YT = '^(?:https?://)?(?:[\w-]+\.)*(?:youtube\.com|youtube-nocookie\.com|youtu\.be)(?:[/:?#]|$)';
 
-function criaCliente: THTTPClient;
-begin
-  Result := THTTPClient.Create;
-  Result.UserAgent := UA_NAVEGADOR;
-  Result.ConnectionTimeout := TIMEOUT_CONEXAO;
-  Result.ResponseTimeout := TIMEOUT_RESPOSTA;
-  Result.HandleRedirects := True;
-end;
-
 function cabecalhosPadrao: TNetHeaders;
 begin
   //Sem o cookie de consentimento, parte da Europa recebe a tela do
@@ -107,8 +98,12 @@ begin
   Result := False;
   if not Assigned(Destino) then Exit;
 
-  cli := criaCliente;
+  cli := THTTPClient.Create;
   try
+    cli.UserAgent := UA_NAVEGADOR;
+    cli.ConnectionTimeout := TIMEOUT_CONEXAO;
+    cli.ResponseTimeout := TIMEOUT_RESPOSTA;
+    cli.HandleRedirects := True;
     try
       resp := cli.Get(Url, Destino, cabecalhosPadrao);
     except
@@ -123,22 +118,15 @@ end;
 
 function baixaTexto(const Url: string; out Conteudo: string): Boolean;
 var
-  ms: TMemoryStream;
-  bytes: TBytes;
+  ss: TStringStream;
 begin
-  Result := False;
   Conteudo := '';
-  ms := TMemoryStream.Create;
+  ss := TStringStream.Create('', TEncoding.UTF8);
   try
-    if not ytBaixaBinario(Url, ms) then Exit;
-    if ms.Size <= 0 then Exit;
-    SetLength(bytes, ms.Size);
-    ms.Position := 0;
-    ms.ReadBuffer(bytes[0], ms.Size);
-    Conteudo := TEncoding.UTF8.GetString(bytes);
-    Result := Conteudo <> '';
+    Result := ytBaixaBinario(Url, ss) and (ss.DataString <> '');
+    if Result then Conteudo := ss.DataString;
   finally
-    ms.Free;
+    ss.Free;
   end;
 end;
 
@@ -280,10 +268,7 @@ begin
       end;
 
     if v.VideoId <> '' then
-    begin
-      SetLength(Videos, Length(Videos) + 1);
-      Videos[High(Videos)] := v;
-    end;
+      Videos := Videos + [v];
 
     m := m.NextMatch;
   end;

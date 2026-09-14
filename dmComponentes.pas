@@ -4,13 +4,12 @@ interface
 
 uses
   System.SysUtils, System.Classes, Vcl.ExtCtrls, bsSkinExCtrls,
-  Windows, Forms, Data.Win.ADODB, Data.DB, Datasnap.DBClient, IdCoder,
+  Windows, Forms, Data.DB, Datasnap.DBClient, IdCoder,
   IdCoder3to4, IdCoderMIME, IdBaseComponent, IdComponent, IdTCPConnection,
   IdTCPClient, IdHTTP, bsDialogs, bsSkinShellCtrls,
   bsPngImageList, System.ImageList, Vcl.ImgList, Vcl.Controls, bsSkinData,
   Vcl.Menus, Vcl.ExtDlgs, Vcl.Dialogs, Graphics, IdIOHandler, IdIOHandlerSocket,
-  IdIOHandlerStack, IdSSL, IdSSLOpenSSL, Data.DBXMySQL, Data.FMTBcd,
-  Datasnap.Provider, Data.SqlExpr, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  IdIOHandlerStack, IdSSL, IdSSLOpenSSL, FireDAC.Stan.Intf, FireDAC.Stan.Option,
   FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
   FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt, FireDAC.UI.Intf,
   FireDAC.Stan.Def, FireDAC.Stan.Pool, FireDAC.Phys, FireDAC.VCLUI.Wait,

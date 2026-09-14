@@ -4,7 +4,7 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, ExtCtrls, Buttons, ComCtrls, DBCtrls, DB, ADODB,
+  Dialogs, StdCtrls, ExtCtrls, Buttons, ComCtrls, DBCtrls, DB,
   bsSkinCtrls, bsdbctrls, Vcl.Mask, bsSkinBoxCtrls, BusinessSkinForm,
   FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Param, ShellApi,
   FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf,

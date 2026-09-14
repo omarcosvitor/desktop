@@ -4,11 +4,11 @@ interface
 
 uses
   Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
-  Dialogs, StdCtrls, Buttons, CustomizeDlg, DB, ADODB, ComCtrls, ImgList, Grids,
+  Dialogs, StdCtrls, Buttons, DB, ComCtrls, ImgList, Grids,
   DBGrids, IniFiles, Menus, ExtCtrls, IdBaseComponent, IdIPWatch,
   IdAntiFreeze, DBClient, IdHTTP, AppEvnts, ValEdit, Mask, MPlayer, DateUtils,
   MMSystem,
-  ActiveX, ShellApi, DBCtrls, OleCtrls, WinInet, OleCtnrs, CheckLst, pngimage,
+  ActiveX, ShellApi, DBCtrls, OleCtrls, WinInet, pngimage,
   ToolWin, jpeg, IdCoder, IdCoderMIME,Vcl.DBCGrids, ClipBrd, urlmon, RichEdit,
   IdAntiFreezeBase, System.Zip, System.UITypes,
   MidasLib, IdStack, System.Types, Bass, Generics.Collections,
@@ -16,6 +16,7 @@ uses
   FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf, FireDAC.DApt.Intf,
   FireDAC.Stan.Async, FireDAC.DApt, FireDAC.Comp.DataSet, FireDAC.Comp.Client,
   System.RegularExpressions, System.NetEncoding, System.IOUtils,
+  System.Net.HttpClient,
   BusinessSkinForm, bsSkinMenus, bsSkinCtrls, bsSkinTabs, bsButtonGroup,
   bsSkinBoxCtrls, bsSkinExCtrls, bsribbon, bsdbctrls, bsSkinShellCtrls,
   bsSkinGrids, bsDBGrids, bsColorCtrls, bsPngImageList;
@@ -13461,34 +13462,20 @@ begin
 end;
 
 function TfmIndex.DownloadArquivo(const Origem, Destino: string): Boolean;
-const
-  BufferSize = 1024;
 var
-  hSession, hURL: HInternet;
-  Buffer: array[1..BufferSize] of Byte;
-  BufferLen: DWORD;
-  f: file;
-  sAppName: string;
+  cli: THTTPClient;
+  arq: TFileStream;
 begin
-  sAppName := ExtractFileName(Application.ExeName);
-  hSession := InternetOpen(PChar(sAppName), INTERNET_OPEN_TYPE_PRECONFIG, nil, nil, 0);
+  cli := THTTPClient.Create;
+  arq := TFileStream.Create(Destino, fmCreate);
   try
-    hURL := InternetOpenURL(hSession, PChar(Origem), nil, 0, 0, 0);
-    try
-      AssignFile(f, Destino);
-      Rewrite(f, 1);
-      repeat
-        InternetReadFile(hURL, @Buffer, SizeOf(Buffer), BufferLen);
-        BlockWrite(f, Buffer, BufferLen)
-      until BufferLen = 0;
-      CloseFile(f);
-      Result := True;
-    finally
-      InternetCloseHandle(hURL)
-    end
+    cli.UserAgent := ExtractFileName(Application.ExeName);
+    cli.HandleRedirects := True;
+    Result := cli.Get(Origem, arq).StatusCode = 200;
   finally
-    InternetCloseHandle(hSession)
-  end
+    arq.Free;
+    cli.Free;
+  end;
 end;
 
 procedure TfmIndex.edtKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);

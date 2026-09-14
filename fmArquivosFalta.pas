@@ -5,7 +5,7 @@ interface
 uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, BusinessSkinForm, bsSkinCtrls,
-  Vcl.ComCtrls, Data.DB, Data.Win.ADODB,
+  Vcl.ComCtrls, Data.DB,
   Vcl.ExtCtrls, WinInet, Vcl.StdCtrls;
 
 type

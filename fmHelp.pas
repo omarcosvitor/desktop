@@ -4,7 +4,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, Vcl.Controls, Vcl.Forms, BusinessSkinForm,
-  Vcl.StdCtrls, Data.DB, Data.Win.ADODB, Vcl.ComCtrls, bsSkinCtrls, strUtils,
+  Vcl.StdCtrls, Data.DB, Vcl.ComCtrls, bsSkinCtrls, strUtils,
   SHDocVw, Vcl.OleCtrls, Vcl.ExtCtrls, Vcl.DBCtrls,
   windows, bsSkinTabs, ActiveX, ShellApi, WinInet;
 

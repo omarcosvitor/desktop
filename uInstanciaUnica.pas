@@ -19,7 +19,8 @@
 interface
 
 uses
-  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes, Vcl.Forms;
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Classes,
+  System.Hash, Vcl.Forms;
 
 var
   //Mensagem registrada no Windows: pede para a instancia ja aberta vir para frente
@@ -32,12 +33,6 @@ var
 //Retorna False quando ja existe outra instancia; nesse caso o programa nao deve iniciar
 function IniciaInstanciaUnica: Boolean;
 
-//Reserva o lugar da instancia. False quando outra copia ja esta rodando
-function ReservaInstancia: Boolean;
-
-//Avisa o usuario e pede para a instancia ja aberta vir para frente
-procedure AvisaJaAberto;
-
 //Libera o mutex. Precisa ser chamada antes de relancar o executavel (reinicio do programa)
 procedure LiberaInstanciaUnica;
 
@@ -46,10 +41,6 @@ function IdInstanciaUnica: Cardinal;
 
 //Traz a janela para frente, preservando o estado maximizado
 procedure TrazJanelaParaFrente(Form: TForm);
-
-//Entrega um arquivo para a instancia ja aberta. False quando nao ha para quem
-//entregar (a janela principal ainda nao existe, por exemplo)
-function EnviaArquivoParaInstancia(const arq: string): Boolean;
 
 implementation
 
@@ -61,9 +52,6 @@ const
 
   //Nao esta declarado na Winapi.Windows desta versao do Delphi
   PROCESS_QUERY_LIMITED_INFORMATION = $1000;
-
-function AllowSetForegroundWindow(dwProcessId: DWORD): BOOL; stdcall;
-  external 'user32.dll' name 'AllowSetForegroundWindow';
 
 function QueryFullProcessImageName(hProcess: THandle; dwFlags: DWORD;
   lpExeName: PChar; var lpdwSize: DWORD): BOOL; stdcall;
@@ -96,23 +84,11 @@ begin
   Result := ExtractFilePath(ParamStr(0)) + sub + '\';
 end;
 
-//FNV-1a: reduz o caminho da pasta a um identificador curto para caber no nome do mutex
-function Hash32(const txt: string): Cardinal;
-var
-  i: Integer;
-begin
-  Result := 2166136261;
-  for i := 1 to Length(txt) do
-  begin
-    Result := Result xor Cardinal(Ord(txt[i]));
-    Result := Result * 16777619;
-  end;
-end;
-
 function IdInstanciaUnica: Cardinal;
 begin
+  //FNV-1a: reduz o caminho da pasta a um identificador curto para caber no nome do mutex
   if FId = 0 then
-    FId := Hash32(LowerCase(PastaConfig));
+    FId := Cardinal(THashFNV1a32.GetHashValue(LowerCase(PastaConfig)));
   Result := FId;
 end;
 

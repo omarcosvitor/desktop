@@ -39,7 +39,6 @@ procedure fmusPara;
 //Encerra na hora, sem esmaecer (fechamento do programa)
 procedure fmusParaJa;
 function fmusTocando: Boolean;
-function fmusEsmaecendo: Boolean;
 procedure fmusDefineVolume(Volume: Integer);
 //Chamado por um cronômetro enquanto toca: refaz o laço e conduz o esmaecimento
 procedure fmusPulso;
@@ -233,11 +232,6 @@ end;
 function fmusTocando: Boolean;
 begin
   Result := FAberto;
-end;
-
-function fmusEsmaecendo: Boolean;
-begin
-  Result := FAberto and FSaindo;
 end;
 
 procedure fmusDefineVolume(Volume: Integer);

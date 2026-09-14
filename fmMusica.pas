@@ -6,9 +6,9 @@ uses
   Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
   Vcl.Controls, Vcl.Forms, Vcl.Dialogs, bsSkinCtrls,
   Vcl.Imaging.jpeg, Vcl.ExtCtrls, Vcl.StdCtrls,
-  Data.DB, Data.Win.ADODB, Bass,
+  Data.DB, Bass,
   Vcl.Grids, Vcl.DBGrids, bsSkinGrids, bsDBGrids,
-  Vcl.Imaging.pngimage, Datasnap.DBClient, Vcl.DBCtrls;
+  Vcl.Imaging.pngimage, Vcl.DBCtrls;
 
 type
   TfMusica = class(TForm)
