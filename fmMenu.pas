@@ -1683,8 +1683,6 @@ type
     procedure DBGrid2DblClick(Sender: TObject);
     procedure txtBuscaKeyPress(Sender: TObject; var Key: Char);
     procedure SorteioContador();
-    function isFolderEmpty(szPath: string): Boolean;
-    function IsNumeric(S: string): boolean;
     function verVersao():Boolean;
     procedure tsSorteioShow(Sender: TObject);
     procedure tsCronometroShow(Sender: TObject);
@@ -1723,10 +1721,8 @@ type
     function ExtraiTexto(const Str, Str1, Str2: string): string;
     procedure carregaParams();
     function GetComputerNameFunc: string;
-    procedure BitmapFileToPNG(const Source, Dest: string);
     procedure LiturgiaCalendarClick(Sender: TObject);
     function verificaURL(url: string; input: TbsSkinEdit; reverso: Boolean = False): string;
-    procedure sListView1DblClick(Sender: TObject);
     procedure expandirArea(Sender: TObject);
     procedure copiaDadosTelaExtendida();
     procedure fcOpcFonteChange(Sender: TObject);
@@ -1759,7 +1755,6 @@ type
     procedure PageControl1Close(Sender: TObject; var CanClose: Boolean);
     procedure bsSkinSpeedButton9Click(Sender: TObject);
     procedure ShowTrackMenu(Sender: TObject);
-    function RemoveTags(const s: string): string;
     procedure carregaConfiguracoes(pagina: string);
     procedure bsSkinSpeedButton10Click(Sender: TObject);
     procedure bsRibbonGroup19DialogButtonClick(Sender: TObject);
@@ -1811,10 +1806,6 @@ type
     procedure opSort_NmKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
     procedure btAddSorteioNMClick(Sender: TObject);
     procedure btImpSorteioNMClick(Sender: TObject);
-    procedure btSortearNMClick(Sender: TObject);
-    procedure btLimpaSorteioLimpaNMClick(Sender: TObject);
-    procedure btLimpaSorteioReiniciaNMClick(Sender: TObject);
-    procedure btLimpaSorteioNMClick(Sender: TObject);
     procedure cbCronoElClick(Sender: TObject);
     procedure bsSkinSpeedButton29Click(Sender: TObject);
     procedure bsSkinButton13Click(Sender: TObject);
@@ -1851,7 +1842,6 @@ type
     procedure bttaCenterClick(Sender: TObject);
     procedure FormClose(Sender: TObject; var Action: TCloseAction);
     procedure mmPainelDKeyPress(Sender: TObject; var Key: Char);
-    function GetEnvVarValue(const VarName: string): string;
     procedure bsAppMenu1Items6Click(Sender: TObject);
     procedure bsSkinSpeedButton23Click(Sender: TObject);
     procedure bsSkinSpeedButton37Click(Sender: TObject);
@@ -2063,7 +2053,6 @@ type
     procedure copiaTextoParaSlides(texto: string; cds: TClientDataSet);
     procedure copiaArquivoParaSlides(url: string; cds: TClientDataSet; fechaerro: boolean = true; ListBox: TListBox = nil; editor: boolean = false);
     procedure copiaSlidesParaArquivo(url: string; cds: TClientDataSet);
-    function cds2texto(cds: TClientDataSet;campo: string): TStringList;
     function HtmlToColor(Color: string): String;
     procedure cbAnotacoesLiturgiaClick(Sender: TObject);
     procedure pnlAnotacoesLiturgiaClose(Sender: TObject);
@@ -2089,7 +2078,6 @@ type
     procedure DBCtrlGridBibliaCapituloClick(Sender: TObject);
     procedure DBCtrlGridBibliaVersiculoClick(Sender: TObject);
     procedure busBibliaVersiculoChange(Sender: TObject);
-    function GetStrNumber(const S: string): string;
     function GetStrNumber2(const S: string): string;
     function primeiroIntervaloNum(S: string): string;
     function geraIntervaloNum(S: string): string;
@@ -4690,24 +4678,6 @@ begin
 end;
 
 
-function TfmIndex.RemoveTags(const s: string): string;
-var
-  i: Integer;
-  InTag: Boolean;
-begin
-  Result := '';
-  InTag := False;
-  for i := 1 to Length(s) do
-  begin
-    if s[i] = '<' then
-      InTag := True
-    else if s[i] = '>' then
-      InTag := False
-    else if not InTag then
-      Result := Result + s[i];
-  end;
-end;
-
 function TfmIndex.removeTagsHTML(texto: string): string;
 begin
   result := TRegEx.Replace(texto, '<[^>]+>', '');
@@ -6258,15 +6228,6 @@ begin
   pnlfmSubTituloRib.Font.Color := StringToColor(layoutValue.Strings.Values['cor_texto_sel']);
 end;
 
-function TfmIndex.isFolderEmpty(szPath: string): Boolean;
-var
-  res: TSearchRec;
-begin
-  szPath := IncludeTrailingPathDelimiter(szPath);
-  Result := (FindFirst(szPath + '*.*', faAnyFile - faDirectory, res) <> 0);
-  FindClose(res);
-end;
-
 procedure TfmIndex.carregaBiblia(tipo: string);
 var
   bus,busp:string;
@@ -7089,13 +7050,6 @@ begin
 
   for i := 0 to lbLiturgia.Items.Count-1 do
     carregaItemLiturgia(lbLiturgia.Items[i],i+1);
-end;
-
-function TfmIndex.IsNumeric(S: string): boolean;
-var
-  i: integer;
-begin
-  Result := TryStrToInt(S, i);
 end;
 
 procedure TfmIndex.btRestaurarCapaProgramaClick(Sender: TObject);
@@ -8222,32 +8176,6 @@ begin
     gravaParam('Itens Agendados', 'RemovePassados', '1')
   else
     gravaParam('Itens Agendados', 'RemovePassados', '0');
-end;
-
-function TfmIndex.cds2texto(cds: TClientDataSet; campo: string): TStringList;
-var
-  texto: TStringList;
-  linha: string;
-  pos: Integer;
-begin
-  if not cds.Active then
-  begin
-    cds.CreateDataSet;
-    cds.LogChanges := False;
-  end;
-
-  texto := TStringList.Create;
-  pos := cds.RecNo;
-  cds.First;
-  while not cds.Eof do
-  begin
-    linha := cds.FieldByName(campo).AsString;
-    linha := StringReplace(linha, #13#10, '|', [rfIgnoreCase, rfReplaceAll]);
-    texto.Add(linha);
-    cds.Next;
-  end;
-  cds.RecNo := pos;
-  Result := texto;
 end;
 
 procedure TfmIndex.selMusica;
@@ -12256,13 +12184,6 @@ begin
   end;
 end;
 
-procedure TfmIndex.btSortearNMClick(Sender: TObject);
-begin
-  if (Trim(opSort_NM.Text) <> '') then
-    btAddSorteioNMClick(nil);
-  btSortearClick(nil);
-end;
-
 procedure TfmIndex.btFormatClick(Sender: TObject);
 var
   tag: integer;
@@ -12370,11 +12291,6 @@ begin
     fMonitorSorteio.lmdSorteio.Caption := lmdSorteio.Caption;
 end;
 
-procedure TfmIndex.btLimpaSorteioReiniciaNMClick(Sender: TObject);
-begin
-  btLimpaSorteioReiniciaClick(nil);
-end;
-
 procedure TfmIndex.btLitClipBoardClick(Sender: TObject);
 var
   i: Integer;
@@ -12478,16 +12394,6 @@ begin
     fMonitorSorteio.lmdSorteio.Caption := lmdSorteio.Caption;
   end;
   SorteioContador();
-end;
-
-procedure TfmIndex.btLimpaSorteioLimpaNMClick(Sender: TObject);
-begin
-  btLimpaSorteioLimpaClick(Sender);
-end;
-
-procedure TfmIndex.btLimpaSorteioNMClick(Sender: TObject);
-begin
-  btLimpaSorteioClick(Sender);
 end;
 
 procedure TfmIndex.btAddSorteioClick(Sender: TObject);
@@ -14261,20 +14167,6 @@ begin
     Result := ipbuffer;
 end;
 
-function TfmIndex.GetEnvVarValue(const VarName: string): string;
-var
-  BufSize: Integer;
-begin
-  BufSize := GetEnvironmentVariable(PChar(VarName), nil, 0);
-  if BufSize > 0 then
-  begin
-    SetLength(Result, BufSize - 1);
-    GetEnvironmentVariable(PChar(VarName), PChar(Result), BufSize);
-  end
-  else
-    Result := '';
-end;
-
 function TfmIndex.GetIP: string;
 begin
   TIdStack.IncUsage;
@@ -14282,26 +14174,6 @@ begin
     Result := GStack.LocalAddress;
   finally
     TIdStack.DecUsage;
-  end;
-end;
-
-function TfmIndex.GetStrNumber(const S: string): string;
-var
-  vText : PChar;
-begin
-  vText := PChar(S);
-  Result := '';
-
-  while (vText^ <> #0) do
-  begin
-    {$IFDEF UNICODE}
-    if CharInSet(vText^, ['0'..'9']) then
-    {$ELSE}
-    if vText^ in ['0'..'9'] then
-    {$ENDIF}
-      Result := Result + vText^;
-
-    Inc(vText);
   end;
 end;
 
@@ -14323,24 +14195,6 @@ begin
 
     Inc(vText);
   end;
-end;
-
-procedure TfmIndex.BitmapFileToPNG(const Source, Dest: string);
-var
-  Bitmap: TBitmap;
-  PNG: TPNGImage;
-begin
-  Bitmap := TBitmap.Create;
-  PNG := TPNGImage.Create;
-  {In case something goes wrong, free booth Bitmap and PNG}
-  try
-    Bitmap.LoadFromFile(Source);
-    PNG.Assign(Bitmap);    //Convert data into png
-    PNG.SaveToFile(Dest);
-  finally
-    Bitmap.Free;
-    PNG.Free;
-  end
 end;
 
 procedure TfmIndex.LiturgiaCalendarClick(Sender: TObject);
@@ -14467,22 +14321,6 @@ begin
     url := copy(url,2,Length(url));
 
   Result := url;
-end;
-
-procedure TfmIndex.sListView1DblClick(Sender: TObject);
-var
-  item: Integer;
-  URL: string;
-begin
-  item := TbsSkinListView(Sender).ItemIndex;
-  if (item < 0) then
-    Exit;
-
-  URL := TbsSkinListView(Sender).Items[item].SubItems[1];
-  if (trim(URL) = '') then
-    Exit;
-
-  abrirArquivo(URL);
 end;
 
 procedure TfmIndex.lbSorteioItemCheckClick(Sender: TObject);

@@ -19,7 +19,6 @@ type
     skLitItem: TbsSkinDBText;
     imFavIcon: TbsPngImageView;
     procedure FormKeyUp(Sender: TObject; var Key: Word; Shift: TShiftState);
-    procedure dbcFavoritosPaintPanel(DBCtrlGrid: TDBCtrlGrid; Index: Integer);
     procedure Image1Click(Sender: TObject);
     procedure imgFavBtUpClick(Sender: TObject);
     procedure imgFavBtDownClick(Sender: TObject);
@@ -37,28 +36,6 @@ implementation
 {$R *.dfm}
 
 uses fmMenu, dmComponentes;
-
-procedure TfFavoritos.dbcFavoritosPaintPanel(DBCtrlGrid: TDBCtrlGrid;
-  Index: Integer);
-var
-  icon: Integer;
-begin
-  icon := DM.cdsFavoritos.FieldByName('IMAGEM').AsInteger;
-
-  imFavIcon.ImageIndex := icon;
-
-  imFavIcon.Visible := (DM.cdsFavoritos.RecordCount > 0);
-  skLitItem.Visible := (DM.cdsFavoritos.RecordCount > 0);
-  imgFavBtUp.Visible := (DM.cdsFavoritos.RecordCount > 0);
-  imgFavBtDown.Visible := (DM.cdsFavoritos.RecordCount > 0);
-  Image1.Visible := (DM.cdsFavoritos.RecordCount > 0);
-
-  if (DM.cdsFavoritos.RecordCount > 0) then
-  begin
-    imgFavBtUp.Visible := (DM.cdsFavoritos.RecNo > 1);
-    imgFavBtDown.Visible := (DM.cdsFavoritos.RecNo < DM.cdsFavoritos.RecordCount);
-  end;
-end;
 
 procedure TfFavoritos.FormKeyUp(Sender: TObject; var Key: Word;
   Shift: TShiftState);

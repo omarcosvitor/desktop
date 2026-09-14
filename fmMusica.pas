@@ -54,8 +54,6 @@ type
     procedure tmrTempoTimer(Sender: TObject);
     procedure pauseplay();
     procedure btProxGravaClick(Sender: TObject);
-    procedure bsSkinDBGrid1DrawColumnCell(Sender: TObject; const Rect: TRect;
-      DataCol: Integer; Column: TbsColumn; State: TGridDrawState);
     procedure dbGridDrawColumnCell(Sender: TObject; const Rect: TRect;
       DataCol: Integer; Column: TbsColumn; State: TGridDrawState);
     procedure btRefreshClick(Sender: TObject);
@@ -72,7 +70,6 @@ type
     procedure Button4Click(Sender: TObject);
     procedure slideInfo(p: string);
     procedure cursor();
-    function IsNumeric(const str: string): Boolean;
   private
     { Private declarations }
     bass_musica: HSAMPLE;
@@ -376,13 +373,6 @@ begin
     fMusicaRetorno.lblLetra_prox.Top := 0;
     fMusicaRetorno.lblLetra_prox.Refresh;
   end;
-end;
-
-procedure TfMusica.bsSkinDBGrid1DrawColumnCell(Sender: TObject;
-  const Rect: TRect; DataCol: Integer; Column: TbsColumn;
-  State: TGridDrawState);
-begin
-  fmIndex.DBGridDrawColumnCell(Sender,Rect,DataCol,Column,State);
 end;
 
 procedure TfMusica.Button1Click(Sender: TObject);
@@ -1162,13 +1152,6 @@ begin
 //  DM.cdsSLIDE_MUSICA.RecNo := num;
   nslide := DM.cdsSLIDE_MUSICA.RecNo;
   slide();
-end;
-
-function TfMusica.IsNumeric(const str: string): Boolean;
-var
-  tempValue: Double;
-begin
-  Result := TryStrToFloat(str, tempValue);
 end;
 
 procedure TfMusica.pauseplay;
